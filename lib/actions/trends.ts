@@ -343,7 +343,6 @@ export async function runAgentPipeline(): Promise<{ drafted: number; skipped: nu
   })
 
   await sendTelegramApproval({
-    id: postDraft.id,
     hook,
     body,
     partner: match.partner,
