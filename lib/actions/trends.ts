@@ -152,40 +152,54 @@ async function generateDraft(
     megan: "@mmlightcap",
   }
 
+  // Pull 5 recent tweets from this partner to use as voice examples
+  const voiceSamples = await prisma.partnerContent.findMany({
+    where: { partner, sourceType: "tweet" },
+    orderBy: { createdAt: "desc" },
+    take: 5,
+    select: { content: true },
+  })
+
+  const voiceExamples = voiceSamples.map((s, i) => `${i + 1}. "${s.content}"`).join("\n")
+
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 600,
     messages: [
       {
         role: "user",
-        content: `You are ghostwriting a tweet for Slow Ventures that will make people stop, think, and want to respond or repost.
+        content: `You are ghostwriting a tweet for Slow Ventures. It needs to sound exactly like ${partnerNames[partner]} wrote it — not a polished brand post, not a journalist summary. Their actual voice.
 
-Trending story: "${trend.headline}"
-Summary: "${trend.summary}"
+Here are recent things ${partnerNames[partner].split(" ")[0]} has actually posted. Study the sentence structure, word choice, length, and how they build an argument:
 
-Here is how ${partnerNames[partner].split(" ")[0]} actually thinks about this space:
+${voiceExamples}
+
+---
+
+Now they're reacting to this:
+Trending: "${trend.headline}"
+Context: "${trend.summary}"
+
+Their relevant thinking on this:
 "${citation}"
 Source: ${sourceUrl}
 
-Your job: write a tweet that does three things at once:
-1. Takes a clear, specific stance on why this moment matters — not obvious, not generic
-2. Connects it to ${partnerNames[partner].split(" ")[0]}'s existing thinking in a way that feels earned, not name-droppy
-3. Ends on something that makes people want to reply, quote-tweet, or share — a provocation, an open question, or a counterintuitive conclusion
+Write a tweet that:
+1. Sounds indistinguishable from the examples above — same rhythm, same directness, same level of detail
+2. Takes a specific, non-obvious stance on why this moment matters
+3. Ends with something that makes people want to reply or quote-tweet
 
-Tone: think @paulg, @sama, @benedictevans, @pmarca at their best. Direct. Specific. Sounds like someone who already saw this coming. Not a brand. Not a journalist. A smart person with a real take.
-
-Format: two parts
-1. HOOK: One sentence. The sharpest possible entry point. Reframes the story, doesn't just repeat it.
-2. BODY: 2-4 sentences. Explain why this actually matters, tie in ${partnerNames[partner].split(" ")[0]}'s POV naturally, and close with something that sparks a reaction — a bold claim, a tension, or an unresolved question.
+Format:
+1. HOOK: One sentence max. Sharp reframe, not a summary.
+2. BODY: 2-3 sentences. Build the argument. Close with a provocation or open question.
 
 Hard rules:
+- Match ${partnerNames[partner].split(" ")[0]}'s natural sentence length and vocabulary from the examples
 - No hashtags, no emojis
-- No "worth noting", "exciting", "important", "as I've written"
-- No reporter language ("signals", "marks a shift", "according to")
-- The last sentence should make someone want to respond
-- Sound like a person, not a content team
-- Do NOT include the partner handle in your output — it will be appended automatically
-- Total post under 240 characters (handle will be added at the end)
+- No "worth noting", "exciting", "important", "signals that"
+- No corporate language — write like a person, not a content team
+- Do NOT include the partner handle — appended automatically
+- Total under 240 characters
 
 Return ONLY valid JSON:
 { "hook": "...", "body": "..." }`,
