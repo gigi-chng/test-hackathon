@@ -8,11 +8,6 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// ═══════════════════════════════════════════════════════════════
-// Auth.js tables — required for authentication
-// Do not rename these models or their fields; Auth.js expects this exact schema.
-// ═══════════════════════════════════════════════════════════════
-
 model User {
   id            String    @id @default(cuid())
   name          String?
@@ -20,9 +15,8 @@ model User {
   emailVerified DateTime?
   image         String?
   password      String?
-
-  accounts Account[]
-  sessions Session[]
+  accounts      Account[]
+  sessions      Session[]
 
   @@map("users")
 }
@@ -39,8 +33,7 @@ model Account {
   scope             String?
   id_token          String?
   session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([provider, providerAccountId])
   @@map("accounts")
@@ -50,8 +43,7 @@ model Session {
   sessionToken String   @unique
   userId       String
   expires      DateTime
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("sessions")
 }
@@ -65,7 +57,72 @@ model VerificationToken {
   @@map("verification_tokens")
 }
 
-// ═══════════════════════════════════════════════════════════════
-// Your app tables — add your own models below
-// After editing, run: npm run db:push
-// ═══════════════════════════════════════════════════════════════
+model PartnerContent {
+  id          String    @id @default(cuid())
+  partner     String    // "sam" | "will" | "yoni" | "megan"
+  sourceType  String    // "tweet" | "blog" | "newsletter" | "podcast"
+  sourceUrl   String?
+  title       String?
+  content     String
+  embedding   Float[]
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@map("partner_content")
+}
+
+model PartnerProfile {
+  id           String   @id @default(cuid())
+  partner      String   @unique
+  displayName  String
+  twitterHandle String?
+  topics       String[]
+  voiceSamples String[]
+  updatedAt    DateTime @updatedAt
+
+  @@map("partner_profiles")
+}
+
+model VideoLibrary {
+  id         String   @id @default(cuid())
+  partner    String
+  title      String
+  storageUrl String
+  transcript String?
+  topics     String[]
+  embedding  Float[]
+  duration   Int?
+  uploadedAt DateTime @default(now())
+
+  @@map("video_library")
+}
+
+model TrendSignal {
+  id             String   @id @default(cuid())
+  headline       String
+  summary        String
+  source         String
+  sourceUrl      String?
+  relevanceScore Float
+  status         String   @default("pending") // pending | drafted | skipped
+  detectedAt     DateTime @default(now())
+
+  @@map("trend_signals")
+}
+
+model PostDraft {
+  id              String    @id @default(cuid())
+  trendSignalId   String?
+  partner         String
+  partnerCitation String
+  hook            String
+  body            String
+  platform        String    @default("both") // twitter | linkedin | both
+  videoId         String?
+  status          String    @default("pending") // pending | approved | rejected | published
+  approvalToken   String    @unique @default(cuid())
+  publishedAt     DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@map("post_drafts")
+}

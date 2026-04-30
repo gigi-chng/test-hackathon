@@ -10,6 +10,10 @@ export default function Home() {
           <div className="w-full max-w-5xl flex justify-between items-center p-3 px-5 text-sm">
             <div className="flex gap-5 items-center font-semibold">
               <Link href="/">Hackathon Starter</Link>
+              <Link href="/meme-generator" className="text-muted-foreground hover:text-foreground">Cat Memes</Link>
+              <Link href="/podcast-tools" className="text-muted-foreground hover:text-foreground">Podcast Tools</Link>
+              <Link href="/comic-generator" className="text-muted-foreground hover:text-foreground">Comic Generator</Link>
+              <Link href="/agent" className="text-muted-foreground hover:text-foreground">Agent</Link>
             </div>
             <AuthButton />
           </div>
