@@ -89,7 +89,7 @@ export async function generateStripImage(concept: ComicConcept): Promise<string>
     style: "vivid",
   })
 
-  const url = response.data[0]?.url
+  const url = response.data?.[0]?.url
   if (!url) throw new Error("No image URL returned")
   return url
 }
