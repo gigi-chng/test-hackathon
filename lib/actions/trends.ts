@@ -162,6 +162,18 @@ async function generateDraft(
 
   const voiceExamples = voiceSamples.map((s, i) => `${i + 1}. "${s.content}"`).join("\n")
 
+  // Pull recent feedback from past drafts
+  const pastFeedback = await prisma.postDraft.findMany({
+    where: { feedback: { not: null } },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+    select: { feedback: true },
+  })
+
+  const feedbackSection = pastFeedback.length > 0
+    ? `\nPast feedback to incorporate:\n${pastFeedback.map((f, i) => `${i + 1}. ${f.feedback}`).join("\n")}\n`
+    : ""
+
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 600,
@@ -176,7 +188,7 @@ ${voiceExamples}
 
 ---
 
-Now they're reacting to this:
+${feedbackSection}Now they're reacting to this:
 Trending: "${trend.headline}"
 Context: "${trend.summary}"
 
@@ -196,9 +208,10 @@ Format:
 Hard rules:
 - Match ${partnerNames[partner].split(" ")[0]}'s natural sentence length and vocabulary from the examples
 - No hashtags, no emojis
+- No em dashes (—) anywhere in the post
 - No "worth noting", "exciting", "important", "signals that"
-- No corporate language — write like a person, not a content team
-- Do NOT include the partner handle — appended automatically
+- No corporate language, write like a person not a content team
+- Do NOT include the partner handle, appended automatically
 - Total under 240 characters
 
 Return ONLY valid JSON:
@@ -216,7 +229,7 @@ Return ONLY valid JSON:
   const handle = partnerHandles[partner]
   return {
     hook: parsed.hook,
-    body: `${parsed.body}\n\n— ${handle}`,
+    body: `${parsed.body}\n\n${handle}`,
   }
 }
 

@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reform — Website Mockup v2</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    * { font-family: 'Inter', sans-serif; }
+    .marquee-track {
+      display: flex;
+      gap: 3rem;
+      animation: marquee 24s linear infinite;
+      white-space: nowrap;
+    }
+    @keyframes marquee {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+    .gradient-border {
+      background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1a 100%);
+      border: 1px solid #222;
+    }
+    .amber-border {
+      background: linear-gradient(135deg, #1c1500 0%, #0f0e00 100%);
+      border: 1px solid #3d2e00;
+    }
+    html { scroll-behavior: smooth; }
+  </style>
+</head>
+<body class="bg-[#080810] text-white antialiased">
+
+  <!-- NAV -->
+  <nav class="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-[#080810]/90 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-10">
+        <span class="text-white font-bold text-lg tracking-tight">Reform</span>
+        <div class="hidden md:flex items-center gap-8 text-sm text-white/60">
+          <a href="#" class="hover:text-white transition-colors">Case Studies</a>
+          <a href="#" class="hover:text-white transition-colors">About</a>
+          <a href="#" class="hover:text-white transition-colors">Blog</a>
+          <a href="#" class="hover:text-white transition-colors">Pricing</a>
+        </div>
+      </div>
+      <button class="bg-blue-600 hover:bg-blue-500 transition-colors text-white text-sm font-medium px-5 py-2.5 rounded-lg">
+        Get a 30-min Walkthrough
+      </button>
+    </div>
+  </nav>
+
+  <!-- TARIFF URGENCY BANNER -->
+  <div class="fixed top-16 left-0 right-0 z-40 bg-amber-500/10 border-b border-amber-500/20 px-6 py-2.5 text-center">
+    <p class="text-xs text-amber-300">
+      <span class="font-semibold">New:</span> The 2026 Supreme Court tariff ruling may entitle your clients to refunds.
+      <a href="#" class="underline underline-offset-2 ml-1 hover:text-amber-200 transition-colors">See how Reform automates duty recovery →</a>
+    </p>
+  </div>
+
+  <!-- HERO -->
+  <section class="pt-52 pb-28 px-6 text-center relative overflow-hidden">
+    <div class="absolute inset-0 bg-gradient-to-b from-blue-950/20 via-transparent to-transparent pointer-events-none"></div>
+    <div class="max-w-5xl mx-auto relative">
+      <div class="inline-flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-4 py-1.5 text-xs text-white/60 mb-8">
+        <span class="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
+        Backed by Y Combinator · W24
+      </div>
+      <h1 class="text-5xl md:text-7xl font-bold tracking-tight leading-[1.05] mb-6">
+        Process more freight.<br />
+        <span class="text-blue-400">Hire fewer people.</span>
+      </h1>
+      <p class="text-xl text-white/60 max-w-2xl mx-auto mb-4 leading-relaxed">
+        Reform automates the manual work inside freight forwarding and customs brokerage — customs prep, AP invoices, quoting, consol creation — without replacing your TMS.
+      </p>
+      <p class="text-sm text-white/35 mb-10">Works inside CargoWise, Magaya, and the rest of your existing stack. Live in under a week.</p>
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+        <button class="bg-blue-600 hover:bg-blue-500 transition-colors text-white font-medium px-8 py-4 rounded-xl text-base w-full sm:w-auto">
+          See what Reform automates for your team
+        </button>
+        <button class="text-white/70 hover:text-white transition-colors font-medium px-8 py-4 text-base flex items-center gap-2 w-full sm:w-auto justify-center">
+          View case studies
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- LOGO MARQUEE -->
+  <section class="py-12 border-y border-white/10 overflow-hidden">
+    <p class="text-center text-xs text-white/30 uppercase tracking-widest mb-8">Trusted by freight forwarders and customs brokers across North America and Latin America</p>
+    <div class="flex overflow-hidden">
+      <div class="marquee-track">
+        <span class="text-white/30 font-semibold text-sm">CITTA BROKERAGE</span>
+        <span class="text-white/30 font-semibold text-sm">KCE LOGISTICS</span>
+        <span class="text-white/30 font-semibold text-sm">JOFFROY GLOBAL</span>
+        <span class="text-white/30 font-semibold text-sm">FREDRIC SCHAD</span>
+        <span class="text-white/30 font-semibold text-sm">CUSTOMS DIRECT</span>
+        <span class="text-white/30 font-semibold text-sm">LEAN SOLUTIONS</span>
+        <span class="text-white/30 font-semibold text-sm">BERPAR</span>
+        <span class="text-white/30 font-semibold text-sm">MAITSA</span>
+        <span class="text-white/30 font-semibold text-sm">JAGUAR</span>
+        <span class="text-white/30 font-semibold text-sm">INTERLINK</span>
+        <span class="text-white/30 font-semibold text-sm">CITTA BROKERAGE</span>
+        <span class="text-white/30 font-semibold text-sm">KCE LOGISTICS</span>
+        <span class="text-white/30 font-semibold text-sm">JOFFROY GLOBAL</span>
+        <span class="text-white/30 font-semibold text-sm">FREDRIC SCHAD</span>
+        <span class="text-white/30 font-semibold text-sm">CUSTOMS DIRECT</span>
+        <span class="text-white/30 font-semibold text-sm">LEAN SOLUTIONS</span>
+        <span class="text-white/30 font-semibold text-sm">BERPAR</span>
+        <span class="text-white/30 font-semibold text-sm">MAITSA</span>
+        <span class="text-white/30 font-semibold text-sm">JAGUAR</span>
+        <span class="text-white/30 font-semibold text-sm">INTERLINK</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- METRICS -->
+  <section class="py-20 px-6">
+    <div class="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-6">
+      <div class="gradient-border rounded-2xl p-6 text-center">
+        <p class="text-4xl font-bold text-white mb-1">250k+</p>
+        <p class="text-sm text-white/40">Hours saved</p>
+      </div>
+      <div class="gradient-border rounded-2xl p-6 text-center">
+        <p class="text-4xl font-bold text-white mb-1">$500M+</p>
+        <p class="text-sm text-white/40">AP invoices processed</p>
+      </div>
+      <div class="gradient-border rounded-2xl p-6 text-center">
+        <p class="text-4xl font-bold text-white mb-1">$1M+</p>
+        <p class="text-sm text-white/40">Annual savings per customer</p>
+      </div>
+      <div class="gradient-border rounded-2xl p-6 text-center">
+        <p class="text-4xl font-bold text-white mb-1">20M+</p>
+        <p class="text-sm text-white/40">Tasks automated</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- PROBLEM -->
+  <section class="py-20 px-6">
+    <div class="max-w-4xl mx-auto text-center">
+      <h2 class="text-3xl md:text-5xl font-bold mb-6 tracking-tight leading-tight">Your TMS runs your freight.<br />Your team runs everything else.</h2>
+      <p class="text-lg text-white/50 leading-relaxed max-w-3xl mx-auto">
+        CargoWise handles the record. Magaya handles the shipment. But the work in between — extracting data from documents, preparing customs entries, reconciling invoices, building consolidations — still runs on spreadsheets, email, and your best people's time. That's where Reform lives.
+      </p>
+    </div>
+  </section>
+
+  <!-- ICP SECTION -->
+  <section class="py-24 px-6">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-xs text-blue-400 font-semibold uppercase tracking-widest text-center mb-4">Who this is for</p>
+      <h2 class="text-3xl md:text-4xl font-bold text-center mb-4 tracking-tight">
+        Built for the operator in the middle.
+      </h2>
+      <p class="text-center text-white/50 mb-16 max-w-2xl mx-auto leading-relaxed">
+        Not the Flexports of the world. Not the solo customs agent working from a laptop. The freight forwarder or customs broker who's grown to a real operation — and is now being squeezed by volume, compliance complexity, and a headcount budget that can't keep pace.
+      </p>
+
+      <div class="grid md:grid-cols-3 gap-5 mb-10">
+
+        <div class="gradient-border rounded-2xl p-7">
+          <p class="text-2xl mb-4">🏢</p>
+          <h3 class="font-bold text-base mb-3">You run a 20–300 person freight operation</h3>
+          <p class="text-sm text-white/50 leading-relaxed">Big enough to have real operational complexity. Small enough that every hour of manual work your team does is an hour not spent on higher-value work.</p>
+        </div>
+
+        <div class="gradient-border rounded-2xl p-7">
+          <p class="text-2xl mb-4">⚙️</p>
+          <h3 class="font-bold text-base mb-3">You're already on CargoWise or Magaya</h3>
+          <p class="text-sm text-white/50 leading-relaxed">Your TMS works. You're not looking to replace it. You need automation that fits around what you already have — not another system that requires a six-month migration.</p>
+        </div>
+
+        <div class="gradient-border rounded-2xl p-7">
+          <p class="text-2xl mb-4">📈</p>
+          <h3 class="font-bold text-base mb-3">Volume is growing. Headcount can't keep up.</h3>
+          <p class="text-sm text-white/50 leading-relaxed">You're either about to hire, just hired, or trying to avoid hiring — because you know the real constraint isn't people, it's the manual work that consumes them.</p>
+        </div>
+
+      </div>
+
+      <!-- The whitespace callout -->
+      <div class="gradient-border rounded-2xl p-8 md:p-10 text-center border-blue-500/20 bg-blue-600/5">
+        <p class="text-xs text-blue-400 font-semibold uppercase tracking-widest mb-3">The whitespace</p>
+        <p class="text-lg font-semibold mb-3 max-w-2xl mx-auto leading-snug">Enterprise platforms are built for the world's largest forwarders. Generic automation tools weren't built for freight at all.</p>
+        <p class="text-sm text-white/50 max-w-xl mx-auto leading-relaxed">The mid-market freight forwarder and customs broker — doing real volume, running real complexity, without a 50-person IT team — has been underserved by both. That's exactly who Reform is built for.</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- WHY REFORM — COMPETITIVE DIFFERENTIATION -->
+  <section class="py-20 px-6 bg-white/[0.02]">
+    <div class="max-w-6xl mx-auto">
+      <p class="text-xs text-blue-400 font-semibold uppercase tracking-widest text-center mb-4">Why Reform</p>
+      <h2 class="text-3xl md:text-4xl font-bold text-center mb-4">Built for freight. Not adapted to it.</h2>
+      <p class="text-center text-white/50 mb-16 max-w-xl mx-auto">Generic automation tools break on edge cases. Reform was designed around how freight actually works.</p>
+      <div class="grid md:grid-cols-2 gap-5">
+
+        <div class="gradient-border rounded-2xl p-8 flex gap-5">
+          <div class="w-10 h-10 bg-blue-600/20 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
+            <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+          </div>
+          <div>
+            <h3 class="font-bold text-base mb-2">Freight-native from day one</h3>
+            <p class="text-sm text-white/50 leading-relaxed">SOPs, templates, and workflows built around how freight forwarding and customs brokerage actually operate — not generic automation retrofitted to logistics.</p>
+          </div>
+        </div>
+
+        <div class="gradient-border rounded-2xl p-8 flex gap-5">
+          <div class="w-10 h-10 bg-blue-600/20 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
+            <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          </div>
+          <div>
+            <h3 class="font-bold text-base mb-2">No rip and replace</h3>
+            <p class="text-sm text-white/50 leading-relaxed">Reform wraps your existing TMS — CargoWise, Magaya, DSGX. Your team keeps working the way they already work. Reform automates the layer between your systems.</p>
+          </div>
+        </div>
+
+        <div class="gradient-border rounded-2xl p-8 flex gap-5">
+          <div class="w-10 h-10 bg-blue-600/20 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
+            <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+          </div>
+          <div>
+            <h3 class="font-bold text-base mb-2">Handles the exceptions, not just the easy stuff</h3>
+            <p class="text-sm text-white/50 leading-relaxed">Most automation tools fail on edge cases. Reform's human-in-the-loop dashboards surface the exceptions that need a decision — and run everything else without intervention.</p>
+          </div>
+        </div>
+
+        <div class="gradient-border rounded-2xl p-8 flex gap-5">
+          <div class="w-10 h-10 bg-blue-600/20 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
+            <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0"/></svg>
+          </div>
+          <div>
+            <h3 class="font-bold text-base mb-2">Proven at mid-market scale</h3>
+            <p class="text-sm text-white/50 leading-relaxed">$1M+ in annual savings per customer. Results from operators with 20–300 person teams — not enterprise case studies your business can't relate to.</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="py-20 px-6">
+    <div class="max-w-6xl mx-auto">
+      <p class="text-xs text-blue-400 font-semibold uppercase tracking-widest text-center mb-4">How it works</p>
+      <h2 class="text-3xl md:text-4xl font-bold text-center mb-16">Set up once. Run forever.</h2>
+      <div class="grid md:grid-cols-4 gap-6">
+        <div class="gradient-border rounded-2xl p-6">
+          <div class="w-8 h-8 rounded-full bg-blue-600/20 flex items-center justify-center text-xs font-bold text-blue-400 mb-4">1</div>
+          <h3 class="font-semibold mb-2">Connect your stack</h3>
+          <p class="text-sm text-white/50 leading-relaxed">Reform plugs into CargoWise, Magaya, QuickBooks, your inbox, and every other system your team uses daily. No migration required.</p>
+        </div>
+        <div class="gradient-border rounded-2xl p-6">
+          <div class="w-8 h-8 rounded-full bg-blue-600/20 flex items-center justify-center text-xs font-bold text-blue-400 mb-4">2</div>
+          <h3 class="font-semibold mb-2">Digitise your SOPs</h3>
+          <p class="text-sm text-white/50 leading-relaxed">Upload how your team actually works. Reform turns your standard procedures into automated workflows — customs prep, AP processing, quoting, duty drawback.</p>
+        </div>
+        <div class="gradient-border rounded-2xl p-6">
+          <div class="w-8 h-8 rounded-full bg-blue-600/20 flex items-center justify-center text-xs font-bold text-blue-400 mb-4">3</div>
+          <h3 class="font-semibold mb-2">Your team handles what matters</h3>
+          <p class="text-sm text-white/50 leading-relaxed">Human-in-the-loop dashboards surface only the exceptions that need a real decision. Everything routine runs without intervention.</p>
+        </div>
+        <div class="gradient-border rounded-2xl p-6">
+          <div class="w-8 h-8 rounded-full bg-blue-600/20 flex items-center justify-center text-xs font-bold text-blue-400 mb-4">4</div>
+          <h3 class="font-semibold mb-2">Full visibility</h3>
+          <p class="text-sm text-white/50 leading-relaxed">Custom dashboards give your team and customers live data across every connected system — one place to see everything.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TARIFF MOMENT -->
+  <section class="py-16 px-6">
+    <div class="max-w-4xl mx-auto">
+      <div class="amber-border rounded-2xl p-8 md:p-10 flex flex-col md:flex-row items-start gap-6">
+        <div class="w-10 h-10 bg-amber-500/20 rounded-xl flex items-center justify-center shrink-0">
+          <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+        </div>
+        <div>
+          <p class="text-xs text-amber-400 font-semibold uppercase tracking-widest mb-2">Tariff environment · April 2026</p>
+          <h3 class="font-bold text-lg mb-3">The tariff environment just made your compliance workload heavier. Your headcount budget didn't.</h3>
+          <p class="text-sm text-white/50 leading-relaxed mb-5">The February 2026 Supreme Court ruling striking down IEEPA tariffs means billions in previously paid duties may now be refundable — but only for brokers who can move fast. Reform automates the duty drawback process so your team can recover refunds at scale without adding headcount.</p>
+          <a href="#" class="inline-flex items-center gap-2 text-sm text-amber-400 hover:text-amber-300 transition-colors font-medium">
+            See Reform's Tariff Refund Calculator
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- WHAT REFORM AUTOMATES -->
+  <section class="py-24 px-6 bg-white/[0.02]">
+    <div class="max-w-6xl mx-auto">
+      <p class="text-xs text-blue-400 font-semibold uppercase tracking-widest text-center mb-4">Use cases</p>
+      <h2 class="text-3xl md:text-4xl font-bold text-center mb-4">What Reform automates</h2>
+      <p class="text-center text-white/50 mb-16 max-w-xl mx-auto">Purpose-built workflows for the operations that consume most of your team's day.</p>
+      <div class="grid md:grid-cols-3 gap-5">
+
+        <div class="gradient-border rounded-2xl p-7">
+          <p class="text-xs text-blue-400 font-semibold uppercase tracking-widest mb-3">Customs Preparation</p>
+          <h3 class="font-bold text-lg mb-3">Declaration-ready in minutes, not hours</h3>
+          <p class="text-sm text-white/50 leading-relaxed">Extract data from commercial invoices, packing lists, and forms. Prep customs entries automatically. Your broker reviews and submits — that's it.</p>
+          <div class="mt-5 pt-5 border-t border-white/10">
+            <p class="text-2xl font-bold text-blue-400">40 min</p>
+            <p class="text-xs text-white/40 mt-1">saved per customs declaration · Customs Direct</p>
+          </div>
+        </div>
+
+        <div class="gradient-border rounded-2xl p-7">
+          <p class="text-xs text-blue-400 font-semibold uppercase tracking-widest mb-3">Accounts Payable</p>
+          <h3 class="font-bold text-lg mb-3">Receive, match, route — without manual intervention</h3>
+          <p class="text-sm text-white/50 leading-relaxed">From invoice receipt to reconciliation, humans are only needed when something doesn't add up. Everything else runs on its own.</p>
+          <div class="mt-5 pt-5 border-t border-white/10">
+            <p class="text-2xl font-bold text-blue-400">18 sec</p>
+            <p class="text-xs text-white/40 mt-1">average bill processing time · KCE Logistics</p>
+          </div>
+        </div>
+
+        <div class="gradient-border rounded-2xl p-7">
+          <p class="text-xs text-blue-400 font-semibold uppercase tracking-widest mb-3">Quoting</p>
+          <h3 class="font-bold text-lg mb-3">One-off quotes prepped in minutes</h3>
+          <p class="text-sm text-white/50 leading-relaxed">Pull rates, extract shipment data, and prep quotes automatically. Your team spends time closing, not building spreadsheets.</p>
+          <div class="mt-5 pt-5 border-t border-white/10">
+            <p class="text-2xl font-bold text-blue-400">85%</p>
+            <p class="text-xs text-white/40 mt-1">reduction in data processing time · Joffroy Global</p>
+          </div>
+        </div>
+
+        <div class="gradient-border rounded-2xl p-7">
+          <p class="text-xs text-blue-400 font-semibold uppercase tracking-widest mb-3">Shipment Consolidation</p>
+          <h3 class="font-bold text-lg mb-3">Consol creation without the data entry</h3>
+          <p class="text-sm text-white/50 leading-relaxed">Automate the field extraction and mapping that consolidation currently takes your team all day to do.</p>
+          <div class="mt-5 pt-5 border-t border-white/10">
+            <p class="text-2xl font-bold text-blue-400">80%</p>
+            <p class="text-xs text-white/40 mt-1">reduction in consol creation time · Berpar</p>
+          </div>
+        </div>
+
+        <div class="gradient-border rounded-2xl p-7">
+          <p class="text-xs text-blue-400 font-semibold uppercase tracking-widest mb-3">Duty Drawback</p>
+          <h3 class="font-bold text-lg mb-3">Recover refunds your team never had bandwidth to chase</h3>
+          <p class="text-sm text-white/50 leading-relaxed">Automate the most time-intensive drawback processes and surface recovery opportunities that currently fall through the cracks.</p>
+          <div class="mt-5 pt-5 border-t border-white/10">
+            <p class="text-2xl font-bold text-blue-400">1,600+</p>
+            <p class="text-xs text-white/40 mt-1">hours saved per month · CITTA Brokerage</p>
+          </div>
+        </div>
+
+        <div class="gradient-border rounded-2xl p-7 flex flex-col justify-between bg-blue-600/10 border-blue-500/20">
+          <div>
+            <p class="text-xs text-blue-400 font-semibold uppercase tracking-widest mb-3">Ready in a week</p>
+            <h3 class="font-bold text-lg mb-3">Live in under 5 days — not months</h3>
+            <p class="text-sm text-white/50 leading-relaxed">Start from a pre-built template for your use case or configure from scratch. No lengthy implementation. No disruption to your existing stack.</p>
+          </div>
+          <button class="mt-6 bg-blue-600 hover:bg-blue-500 transition-colors text-white font-medium px-5 py-3 rounded-xl text-sm w-full">
+            See what Reform automates for your team →
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- TESTIMONIALS -->
+  <section class="py-24 px-6">
+    <div class="max-w-6xl mx-auto">
+      <p class="text-xs text-blue-400 font-semibold uppercase tracking-widest text-center mb-4">Results</p>
+      <h2 class="text-3xl md:text-4xl font-bold text-center mb-3">What operators are saying</h2>
+      <p class="text-center text-white/40 text-sm mb-16 max-w-lg mx-auto">Not enterprise case studies. Results from freight forwarders and customs brokers running 20–300 person operations.</p>
+      <div class="grid md:grid-cols-3 gap-5">
+
+        <div class="gradient-border rounded-2xl p-7">
+          <p class="text-white/80 text-sm leading-relaxed mb-6">"Reform has become a true force multiplier for our business, turning our biggest operational bottleneck into a competitive advantage."</p>
+          <div class="flex items-center gap-3 pt-5 border-t border-white/10">
+            <div class="w-9 h-9 rounded-full bg-blue-600/30 flex items-center justify-center text-xs font-bold text-blue-300">SS</div>
+            <div>
+              <p class="text-sm font-medium">Scott Sorenson</p>
+              <p class="text-xs text-white/40">CITTA Brokerage · 1,600+ hrs/month saved</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="gradient-border rounded-2xl p-7">
+          <p class="text-white/80 text-sm leading-relaxed mb-6">"After reviewing multiple solutions, nothing came close to Reform's AI technology, deep integrations, and user-friendly platform."</p>
+          <div class="flex items-center gap-3 pt-5 border-t border-white/10">
+            <div class="w-9 h-9 rounded-full bg-blue-600/30 flex items-center justify-center text-xs font-bold text-blue-300">ME</div>
+            <div>
+              <p class="text-sm font-medium">Marco Esparza Villa</p>
+              <p class="text-xs text-white/40">Joffroy Global · 85% time savings</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="gradient-border rounded-2xl p-7">
+          <p class="text-white/80 text-sm leading-relaxed mb-6">"Reform truly understands the freight forwarding industry and the challenges we face."</p>
+          <div class="flex items-center gap-3 pt-5 border-t border-white/10">
+            <div class="w-9 h-9 rounded-full bg-blue-600/30 flex items-center justify-center text-xs font-bold text-blue-300">YP</div>
+            <div>
+              <p class="text-sm font-medium">Young Eun Park</p>
+              <p class="text-xs text-white/40">KCE Logistics · 18 sec avg bill processing</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="gradient-border rounded-2xl p-7">
+          <p class="text-white/80 text-sm leading-relaxed mb-6">"Reform's document automation tech has been exceptional — fast, accurate, and built for scale."</p>
+          <div class="flex items-center gap-3 pt-5 border-t border-white/10">
+            <div class="w-9 h-9 rounded-full bg-blue-600/30 flex items-center justify-center text-xs font-bold text-blue-300">AQ</div>
+            <div>
+              <p class="text-sm font-medium">Alfonso Quijano</p>
+              <p class="text-xs text-white/40">Lean Solutions Group · 20+ automations</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="gradient-border rounded-2xl p-7">
+          <p class="text-white/80 text-sm leading-relaxed mb-6">"Reform has not only saved us countless hours but also significantly improved our accuracy and data quality."</p>
+          <div class="flex items-center gap-3 pt-5 border-t border-white/10">
+            <div class="w-9 h-9 rounded-full bg-blue-600/30 flex items-center justify-center text-xs font-bold text-blue-300">MS</div>
+            <div>
+              <p class="text-sm font-medium">Mikael Schad</p>
+              <p class="text-xs text-white/40">Fredric Schad · 2,500+ invoices/day</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="gradient-border rounded-2xl p-7">
+          <p class="text-white/80 text-sm leading-relaxed mb-6">"Reform understands our challenges, adapts to our workflows, and delivers real solutions — fast."</p>
+          <div class="flex items-center gap-3 pt-5 border-t border-white/10">
+            <div class="w-9 h-9 rounded-full bg-blue-600/30 flex items-center justify-center text-xs font-bold text-blue-300">SC</div>
+            <div>
+              <p class="text-sm font-medium">Sebastián Cano</p>
+              <p class="text-xs text-white/40">Berpar · 8x data processing efficiency</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- INTEGRATIONS -->
+  <section class="py-24 px-6 bg-white/[0.02]">
+    <div class="max-w-4xl mx-auto text-center">
+      <p class="text-xs text-blue-400 font-semibold uppercase tracking-widest mb-4">Integrations</p>
+      <h2 class="text-3xl md:text-4xl font-bold mb-4">Keeps what works. Automates what sits between.</h2>
+      <p class="text-white/50 mb-14 max-w-xl mx-auto">Reform connects to your existing TMS, accounting tools, email, and document sources. Your team stays on the systems they know.</p>
+      <div class="flex flex-wrap items-center justify-center gap-4 mb-6">
+        <div class="gradient-border rounded-xl px-6 py-3 text-sm font-semibold text-white/80 border-blue-500/30 bg-blue-600/10">CargoWise</div>
+        <div class="gradient-border rounded-xl px-6 py-3 text-sm font-semibold text-white/80 border-blue-500/30 bg-blue-600/10">Magaya</div>
+        <div class="gradient-border rounded-xl px-6 py-3 text-sm font-medium text-white/60">DSGX</div>
+        <div class="gradient-border rounded-xl px-6 py-3 text-sm font-medium text-white/60">QuickBooks</div>
+        <div class="gradient-border rounded-xl px-6 py-3 text-sm font-medium text-white/60">Microsoft Outlook</div>
+        <div class="gradient-border rounded-xl px-6 py-3 text-sm font-medium text-white/60">Gmail</div>
+        <div class="gradient-border rounded-xl px-6 py-3 text-sm font-medium text-white/60">Excel</div>
+        <div class="gradient-border rounded-xl px-6 py-3 text-sm font-medium text-white/60">Zapier</div>
+      </div>
+      <p class="text-xs text-white/30">Already on CargoWise or Magaya? Reform is live in under a week.</p>
+    </div>
+  </section>
+
+  <!-- SECURITY STRIP -->
+  <section class="py-10 px-6 border-y border-white/10">
+    <div class="max-w-4xl mx-auto flex flex-wrap items-center justify-center gap-8 text-xs text-white/30 font-medium uppercase tracking-widest">
+      <span>SOC 2</span>
+      <span>·</span>
+      <span>ISO/IEC 27001</span>
+      <span>·</span>
+      <span>GDPR</span>
+      <span>·</span>
+      <span>Encrypted at rest & in transit</span>
+    </div>
+  </section>
+
+  <!-- FINAL CTA -->
+  <section class="py-32 px-6 text-center relative overflow-hidden">
+    <div class="absolute inset-0 bg-gradient-to-b from-transparent via-blue-950/20 to-transparent pointer-events-none"></div>
+    <div class="max-w-3xl mx-auto relative">
+      <h2 class="text-4xl md:text-6xl font-bold mb-6 tracking-tight leading-tight">
+        See what Reform<br />automates for your team
+      </h2>
+      <p class="text-white/50 text-lg mb-3">
+        Live in under a week. No long implementation. No replacing your TMS.
+      </p>
+      <p class="text-white/30 text-sm mb-10">Most customers are processing their first automation within 5 days of kickoff.</p>
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+        <button class="bg-blue-600 hover:bg-blue-500 transition-colors text-white font-medium px-10 py-4 rounded-xl text-base w-full sm:w-auto">
+          Get a 30-min Walkthrough
+        </button>
+        <button class="border border-white/20 hover:border-white/40 transition-colors text-white font-medium px-10 py-4 rounded-xl text-base w-full sm:w-auto">
+          View Case Studies
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-white/10 py-14 px-6">
+    <div class="max-w-7xl mx-auto">
+      <div class="grid md:grid-cols-4 gap-10 mb-12">
+        <div>
+          <p class="font-bold text-lg mb-3">Reform</p>
+          <p class="text-sm text-white/40 leading-relaxed">The AI layer that makes your freight operation scale without hiring.</p>
+          <p class="text-xs text-white/30 mt-4">San Francisco, CA · team@reformhq.com</p>
+        </div>
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-widest text-white/30 mb-4">Product</p>
+          <ul class="space-y-2.5 text-sm text-white/50">
+            <li><a href="#" class="hover:text-white transition-colors">Customs Preparation</a></li>
+            <li><a href="#" class="hover:text-white transition-colors">Accounts Payable</a></li>
+            <li><a href="#" class="hover:text-white transition-colors">Quoting</a></li>
+            <li><a href="#" class="hover:text-white transition-colors">Duty Drawback</a></li>
+            <li><a href="#" class="hover:text-white transition-colors">Integrations</a></li>
+            <li><a href="#" class="hover:text-white transition-colors">Pricing</a></li>
+          </ul>
+        </div>
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-widest text-white/30 mb-4">Company</p>
+          <ul class="space-y-2.5 text-sm text-white/50">
+            <li><a href="#" class="hover:text-white transition-colors">About</a></li>
+            <li><a href="#" class="hover:text-white transition-colors">Blog</a></li>
+            <li><a href="#" class="hover:text-white transition-colors">Case Studies</a></li>
+            <li><a href="#" class="hover:text-white transition-colors">Careers</a></li>
+          </ul>
+        </div>
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-widest text-white/30 mb-4">Security</p>
+          <ul class="space-y-2.5 text-sm text-white/50">
+            <li>SOC 2 Certified</li>
+            <li>ISO/IEC 27001</li>
+            <li>GDPR Compliant</li>
+            <li><a href="#" class="hover:text-white transition-colors">Privacy Policy</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="pt-8 border-t border-white/10 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-white/30">
+        <p>© 2026 Reform. All rights reserved.</p>
+        <div class="flex items-center gap-4">
+          <a href="#" class="hover:text-white transition-colors">LinkedIn</a>
+          <a href="#" class="hover:text-white transition-colors">X / Twitter</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>

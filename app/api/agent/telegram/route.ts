@@ -40,6 +40,13 @@ export async function POST(req: NextRequest) {
       data: { status: "rejected" },
     })
     await sendTelegramMessage(chatId, "Draft rejected.")
+  } else if (text.startsWith("feedback:")) {
+    const note = text.replace("feedback:", "").trim()
+    await prisma.postDraft.update({
+      where: { id: draft.id },
+      data: { feedback: note },
+    })
+    await sendTelegramMessage(chatId, `Got it. Saved: "${note}"\nThis will shape all future drafts.\n\nStill want to approve or reject this one?`)
   } else if (text === "next") {
     // Show the next pending draft if multiple exist
     const next = await prisma.postDraft.findFirst({
@@ -52,7 +59,7 @@ export async function POST(req: NextRequest) {
       await sendTelegramMessage(chatId, `Next draft:\n\n${next.hook}\n\n${next.body}\n\nReply approve or reject.`)
     }
   } else {
-    await sendTelegramMessage(chatId, `Reply with:\n• approve — post the draft\n• reject — discard it\n• next — see next draft`)
+    await sendTelegramMessage(chatId, `Reply with:\n• approve — post the draft\n• reject — discard it\n• next — see next draft\n• feedback: [note] — teach the agent for next time`)
   }
 
   return NextResponse.json({ ok: true })
