@@ -198,12 +198,12 @@ Source: ${sourceUrl}
 
 Write a tweet that:
 1. Sounds indistinguishable from the examples above — same rhythm, same directness, same level of detail
-2. Takes a specific, non-obvious stance on why this moment matters
-3. Ends with something that makes people want to reply or quote-tweet
+2. Surfaces an insight that sophisticated investors have been saying privately but mainstream hasn't caught onto yet — the post should make the reader feel like they're getting early signal, not a recap
+3. Ends with a declarative statement or sharp observation, NOT a question
 
 Format:
 1. HOOK: One sentence max. Sharp reframe, not a summary.
-2. BODY: 2-3 sentences. Build the argument. Close with a provocation or open question.
+2. BODY: 2-3 sentences. Build the argument. Land on a confident insight or prediction — do not close with a question.
 
 Hard rules:
 - Match ${partnerNames[partner].split(" ")[0]}'s natural sentence length and vocabulary from the examples
@@ -211,6 +211,7 @@ Hard rules:
 - No em dashes (—) anywhere in the post
 - No "worth noting", "exciting", "important", "signals that"
 - No corporate language, write like a person not a content team
+- Do NOT end with a question — no "What do you think?", no "Is this X or Y?", no rhetorical questions fishing for engagement
 - Do NOT include the partner handle, appended automatically
 - Total under 240 characters
 
