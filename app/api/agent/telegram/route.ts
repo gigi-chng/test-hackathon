@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     })
     await sendTelegramMessage(
       chatId,
-      `Posted.\n${results.twitter ? "✓ Twitter" : "✗ Twitter failed"}\n${results.linkedin ? "✓ LinkedIn" : "✗ LinkedIn (not configured)"}`
+      `Posted.\n${results.twitter ? "✓ Twitter" : "✗ Twitter failed"}\n${results.linkedin ? "✓ LinkedIn" : `✗ LinkedIn failed: ${results.linkedinError || "unknown"}`}`
     )
   } else if (text === "reject") {
     await prisma.postDraft.update({
@@ -76,7 +76,7 @@ async function sendTelegramMessage(chatId: string, text: string) {
 
 async function publishDraft(draft: { hook: string; body: string; videoId: string | null }) {
   const postText = `${draft.hook}\n\n${draft.body}`
-  const results = { twitter: false, linkedin: false }
+  const results: { twitter: boolean; linkedin: boolean; linkedinError?: string } = { twitter: false, linkedin: false }
 
   const twitterKey = process.env.TWITTER_API_KEY
   const twitterSecret = process.env.TWITTER_API_SECRET
@@ -126,9 +126,17 @@ async function publishDraft(draft: { hook: string; body: string; videoId: string
         }),
       })
       results.linkedin = res.ok
+      if (!res.ok) {
+        const errText = await res.text()
+        console.error("LinkedIn error:", res.status, errText)
+        results.linkedinError = `${res.status}: ${errText}`
+      }
     } catch (e) {
       console.error("LinkedIn publish error:", e)
+      results.linkedinError = String(e)
     }
+  } else {
+    results.linkedinError = `missing: token=${!!linkedinToken} orgId=${!!linkedinOrgId}`
   }
 
   return results
