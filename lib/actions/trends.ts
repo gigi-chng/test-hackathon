@@ -271,10 +271,6 @@ async function sendTelegramApproval(draft: {
     megan: "Megan Lightcap",
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-  const approveUrl = `${baseUrl}/api/agent/approve?token=${draft.approvalToken}&action=approve`
-  const rejectUrl = `${baseUrl}/api/agent/approve?token=${draft.approvalToken}&action=reject`
-
   const fullText = [
     `📣 *Draft ready for approval*`,
     `_Responding to: ${draft.trend.headline} (${draft.trend.source})_`,
@@ -291,8 +287,7 @@ async function sendTelegramApproval(draft: {
     `_"${draft.partnerCitation.slice(0, 150)}..."_`,
     draft.videoId ? `📎 Relevant video from library will be attached` : "",
     ``,
-    `✅ Approve & post: ${approveUrl}`,
-    `❌ Reject: ${rejectUrl}`,
+    `Reply *approve* to post, *reject* to discard, or *feedback: [note]* to improve it.`,
   ].filter(line => line !== undefined && line !== null).join("\n")
 
   await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
