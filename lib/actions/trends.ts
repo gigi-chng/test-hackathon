@@ -245,7 +245,7 @@ Return ONLY valid JSON:
 
   return {
     hook: `${parsed.twitter}\n\n${partnerHandles[partner]}`,
-    body: `${parsed.linkedin}\n\n${partnerLinkedIn[partner]}`,
+    body: parsed.linkedin,
   }
 }
 
