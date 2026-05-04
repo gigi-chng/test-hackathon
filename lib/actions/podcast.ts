@@ -92,9 +92,9 @@ For each clip produce:
 
 4. EDITING NOTES — 5–6 production instructions written in Indonesian. Cover: on-screen text, words to highlight, pacing, close-up moments, where to cut, and how to end the clip. Always note which trending news story this connects to if relevant.
 
-5. CTA LINE — A single line of on-screen text shown in the final 3 seconds that drives viewers to the full episode. Should create urgency or curiosity. Example: "The full argument gets darker. Full episode in bio." or "They go much deeper on this. Link in bio."
+5. CTA LINE — Written in Indonesian. A single instruction for the editor describing what text to show on screen in the final 3 seconds to drive viewers to the full episode. Should create urgency or curiosity. Example: "Tampilkan teks: 'Argumen ini makin dalam di episode penuh. Link di bio.'"
 
-6. CLIFFHANGER — If the clip can be cut 5–10 seconds early to leave something unresolved, describe exactly where to cut and what question it leaves hanging. This is the single most effective driver of full-episode clicks.
+6. CLIFFHANGER — Written in Indonesian. If the clip can be cut 5–10 seconds early to leave something unresolved, describe exactly where to cut and what question it leaves the viewer with. Example: "Potong setelah Sam bilang '...dan itulah masalahnya' — penonton penasaran apa solusinya."
 
 7. TIMESTAMP — Estimated position in episode (e.g. "~7:30–9:00").
 
