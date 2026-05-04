@@ -75,7 +75,8 @@ async function sendTelegramMessage(chatId: string, text: string) {
 }
 
 async function publishDraft(draft: { hook: string; body: string; videoId: string | null }) {
-  const postText = `${draft.hook}\n\n${draft.body}`
+  const twitterText = draft.hook  // hook = twitter post
+  const linkedinText = draft.body // body = linkedin post
   const results: { twitter: boolean; linkedin: boolean; linkedinError?: string } = { twitter: false, linkedin: false }
 
   const twitterKey = process.env.TWITTER_API_KEY
@@ -85,7 +86,7 @@ async function publishDraft(draft: { hook: string; body: string; videoId: string
 
   if (twitterKey && twitterSecret && twitterToken && twitterTokenSecret) {
     try {
-      const body = JSON.stringify({ text: postText.slice(0, 280) })
+      const body = JSON.stringify({ text: twitterText.slice(0, 280) })
       const authHeader = await buildTwitterOAuthHeader(
         "POST", "https://api.twitter.com/2/tweets", body,
         { twitterKey, twitterSecret, twitterToken, twitterTokenSecret }
@@ -118,7 +119,7 @@ async function publishDraft(draft: { hook: string; body: string; videoId: string
           lifecycleState: "PUBLISHED",
           specificContent: {
             "com.linkedin.ugc.ShareContent": {
-              shareCommentary: { text: postText },
+              shareCommentary: { text: linkedinText },
               shareMediaCategory: "NONE",
             },
           },

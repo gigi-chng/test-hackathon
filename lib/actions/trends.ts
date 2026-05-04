@@ -181,11 +181,11 @@ async function generateDraft(
 
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 600,
+    max_tokens: 1200,
     messages: [
       {
         role: "user",
-        content: `You are ghostwriting a tweet for Slow Ventures. It needs to sound exactly like ${partnerNames[partner]} wrote it — not a polished brand post, not a journalist summary. Their actual voice.
+        content: `You are ghostwriting social posts for Slow Ventures. They need to sound exactly like ${partnerNames[partner]} wrote them — not a polished brand post, not a journalist summary. Their actual voice.
 
 Here are recent things ${partnerNames[partner].split(" ")[0]} has actually posted. Study the sentence structure, word choice, length, and how they build an argument:
 
@@ -193,7 +193,7 @@ ${voiceExamples}
 
 ---
 
-${feedbackSection}Now they're reacting to this:
+${feedbackSection}They're reacting to this:
 Trending: "${trend.headline}"
 Context: "${trend.summary}"
 
@@ -201,27 +201,33 @@ Their relevant thinking on this:
 "${citation}"
 Source: ${sourceUrl}
 
-Write a tweet that:
-1. Sounds indistinguishable from the examples above — same rhythm, same directness, same level of detail
-2. Surfaces an insight that sophisticated investors have been saying privately but mainstream hasn't caught onto yet — the post should make the reader feel like they're getting early signal, not a recap
-3. Ends with a declarative statement or sharp observation, NOT a question
+Write TWO versions — one for Twitter, one for LinkedIn.
 
-Format:
-1. HOOK: One sentence max. Sharp reframe, not a summary.
-2. BODY: 2-3 sentences. Build the argument. Land on a confident insight or prediction — do not close with a question.
+TWITTER (under 260 characters total including handle):
+- Name the thing directly. Reference the specific news, company, or trend by name — don't be vague
+- Lead with the sharpest possible take, not a warm-up sentence
+- Surfaces an insight sophisticated investors have been saying privately but mainstream hasn't caught onto yet
+- Declarative and confident — no questions, no hedging
+- Hard rules: no em dashes, no hashtags, no emojis, no "worth noting/exciting/important/signals that", no corporate language
 
-Hard rules:
+LINKEDIN (150-400 characters):
+- Same voice and insight as the Twitter post but expanded
+- First line = the same sharp hook
+- 2-3 sentences that build the argument with more context and specificity
+- Reference the trend/news directly by name
+- End with a confident declarative observation or prediction
+- Hard rules: same as Twitter — no em dashes, no hashtags, no questions at the end
+
+Hard rules for BOTH:
 - Match ${partnerNames[partner].split(" ")[0]}'s natural sentence length and vocabulary from the examples
-- No hashtags, no emojis
-- No em dashes (—) anywhere in the post
+- No em dashes (—) anywhere
 - No "worth noting", "exciting", "important", "signals that"
 - No corporate language, write like a person not a content team
-- Do NOT end with a question — no "What do you think?", no "Is this X or Y?", no rhetorical questions fishing for engagement
+- Do NOT end with a question
 - Do NOT include the partner handle, appended automatically
-- Total under 240 characters
 
 Return ONLY valid JSON:
-{ "hook": "...", "body": "..." }`,
+{ "twitter": "...", "linkedin": "..." }`,
       },
     ],
   })
@@ -231,11 +237,10 @@ Return ONLY valid JSON:
   const raw = text.text.trim().replace(/^```json\n?/, "").replace(/\n?```$/, "")
   const parsed = JSON.parse(raw)
 
-  // Append partner handle to body
   const handle = partnerHandles[partner]
   return {
-    hook: parsed.hook,
-    body: `${parsed.body}\n\n${handle}`,
+    hook: `${parsed.twitter}\n\n${handle}`,
+    body: `${parsed.linkedin}\n\n${handle}`,
   }
 }
 
@@ -281,9 +286,12 @@ async function sendTelegramApproval(draft: {
     `_Responding to: ${draft.trend.headline} (${draft.trend.source})_`,
     ``,
     `─────────────────────`,
-    `*WHAT WILL BE POSTED:*`,
+    `*TWITTER:*`,
     ``,
     `${draft.hook}`,
+    ``,
+    `─────────────────────`,
+    `*LINKEDIN:*`,
     ``,
     `${draft.body}`,
     `─────────────────────`,
@@ -292,7 +300,7 @@ async function sendTelegramApproval(draft: {
     `_"${draft.partnerCitation.slice(0, 150)}..."_`,
     draft.videoId ? `📎 Relevant video from library will be attached` : "",
     ``,
-    `Reply *approve* to post, *reject* to discard, or *feedback: [note]* to improve it.`,
+    `Reply *approve* to post both, *reject* to discard, or *feedback: [note]* to improve it.`,
   ].filter(line => line !== undefined && line !== null).join("\n")
 
   await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
