@@ -181,7 +181,7 @@ async function generateDraft(
 
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 1200,
+    max_tokens: 1800,
     messages: [
       {
         role: "user",
@@ -210,13 +210,12 @@ TWITTER (under 260 characters total including handle):
 - Declarative and confident — no questions, no hedging
 - Hard rules: no em dashes, no hashtags, no emojis, no "worth noting/exciting/important/signals that", no corporate language
 
-LINKEDIN (150-400 characters):
-- Same voice and insight as the Twitter post but expanded
-- First line = the same sharp hook
-- 2-3 sentences that build the argument with more context and specificity
-- Reference the trend/news directly by name
-- End with a confident declarative observation or prediction
-- Hard rules: same as Twitter — no em dashes, no hashtags, no questions at the end
+LINKEDIN (aim for 600-900 characters):
+- Line 1: One sharp hook sentence — same energy as the Twitter post, makes someone stop scrolling
+- Lines 2-4: Expand the partner's actual thinking. This is the educational part — explain the underlying thesis, what the partner has observed, why this trend matters from an investor/operator perspective. Reference the specific insight from their writing or tweets. Make the reader feel like they're getting access to how a smart investor actually thinks about this, not just a reaction.
+- Final line: A confident declarative statement or sharp prediction — no questions
+- Write in the partner's voice but with more room to breathe — LinkedIn readers expect more depth
+- Hard rules: no em dashes, no hashtags, no questions at the end, no bullet points
 
 Hard rules for BOTH:
 - Match ${partnerNames[partner].split(" ")[0]}'s natural sentence length and vocabulary from the examples
