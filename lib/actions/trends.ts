@@ -157,6 +157,13 @@ async function generateDraft(
     megan: "@mmlightcap",
   }
 
+  const partnerLinkedIn: Record<string, string> = {
+    sam: "linkedin.com/in/sam-lessin",
+    will: "linkedin.com/in/will-quist-b4b4974",
+    yoni: "linkedin.com/in/yrechtman",
+    megan: "linkedin.com/in/megan-lightcap-513ab96b",
+  }
+
   // Pull 5 recent tweets from this partner to use as voice examples
   const voiceSamples = await prisma.partnerContent.findMany({
     where: { partner, sourceType: "tweet" },
@@ -223,7 +230,7 @@ Hard rules for BOTH:
 - No "worth noting", "exciting", "important", "signals that"
 - No corporate language, write like a person not a content team
 - Do NOT end with a question
-- Do NOT include the partner handle, appended automatically
+- Do NOT include any handle or profile link — attribution is appended automatically
 
 Return ONLY valid JSON:
 { "twitter": "...", "linkedin": "..." }`,
@@ -236,10 +243,9 @@ Return ONLY valid JSON:
   const raw = text.text.trim().replace(/^```json\n?/, "").replace(/\n?```$/, "")
   const parsed = JSON.parse(raw)
 
-  const handle = partnerHandles[partner]
   return {
-    hook: `${parsed.twitter}\n\n${handle}`,
-    body: `${parsed.linkedin}\n\n${handle}`,
+    hook: `${parsed.twitter}\n\n${partnerHandles[partner]}`,
+    body: `${parsed.linkedin}\n\n${partnerLinkedIn[partner]}`,
   }
 }
 
