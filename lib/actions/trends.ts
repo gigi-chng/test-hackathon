@@ -313,6 +313,17 @@ export async function runAgentPipeline(): Promise<{ drafted: number; skipped: nu
     return { drafted: 0, skipped: 0, reason: "Weekly cap of 3 drafts reached" }
   }
 
+  // Refresh knowledge base every Monday
+  const today = new Date()
+  if (today.getDay() === 1) {
+    try {
+      const { ingestAllPartners } = await import("@/lib/actions/ingest")
+      await ingestAllPartners()
+    } catch (e) {
+      console.error("Ingestion failed (non-blocking):", e)
+    }
+  }
+
   const news = await fetchTrendingNews()
   let skipped = 0
 
