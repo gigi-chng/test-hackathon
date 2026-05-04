@@ -74,7 +74,7 @@ async function sendTelegramMessage(chatId: string, text: string) {
   })
 }
 
-async function publishDraft(draft: { hook: string; body: string; videoId: string | null }) {
+async function publishDraft(draft: { hook: string; body: string; videoId: string | null; quoteTweetId?: string | null }) {
   const twitterText = draft.hook  // hook = twitter post
   const linkedinText = draft.body // body = linkedin post
   const results: { twitter: boolean; linkedin: boolean; linkedinError?: string } = { twitter: false, linkedin: false }
@@ -86,7 +86,9 @@ async function publishDraft(draft: { hook: string; body: string; videoId: string
 
   if (twitterKey && twitterSecret && twitterToken && twitterTokenSecret) {
     try {
-      const body = JSON.stringify({ text: twitterText.slice(0, 280) })
+      const tweetPayload: Record<string, unknown> = { text: twitterText.slice(0, 280) }
+      if (draft.quoteTweetId) tweetPayload.quote_tweet_id = draft.quoteTweetId
+      const body = JSON.stringify(tweetPayload)
       const authHeader = await buildTwitterOAuthHeader(
         "POST", "https://api.twitter.com/2/tweets", body,
         { twitterKey, twitterSecret, twitterToken, twitterTokenSecret }

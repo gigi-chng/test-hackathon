@@ -244,6 +244,76 @@ Return ONLY valid JSON:
   }
 }
 
+// ─── Find tweet to quote ─────────────────────────────────────────────────────
+
+const TIER1_ACCOUNTS = [
+  "techcrunch", "wsj", "bloomberg", "nytimes", "reuters",
+  "ft", "theinformation", "wired", "verge", "forbes",
+  "businessinsider", "axios", "theatlantic", "fastcompany",
+]
+
+async function findTweetToQuote(headline: string, keywords: string): Promise<{ id: string; url: string } | null> {
+  const bearerToken = process.env.TWITTER_BEARER_TOKEN
+  if (!bearerToken) return null
+
+  const encode = (s: string) => encodeURIComponent(s)
+
+  // Build keyword query from headline (first 4 significant words)
+  const keywordQuery = headline
+    .split(" ")
+    .filter(w => w.length > 3)
+    .slice(0, 4)
+    .join(" ")
+
+  // Try tier 1 outlets first
+  const tier1Query = `(${TIER1_ACCOUNTS.map(a => `from:${a}`).join(" OR ")}) (${keywordQuery}) -is:retweet lang:en`
+  const tier1Url = `https://api.twitter.com/2/tweets/search/recent?query=${encode(tier1Query)}&max_results=10&tweet.fields=public_metrics,author_id&expansions=author_id&user.fields=username`
+
+  try {
+    const res = await fetch(tier1Url, {
+      headers: { Authorization: `Bearer ${bearerToken}` },
+    })
+    const data = await res.json()
+    if (data.data?.length > 0) {
+      // Pick the tweet with most engagement
+      const best = data.data.sort((a: { public_metrics: { retweet_count: number; like_count: number } }, b: { public_metrics: { retweet_count: number; like_count: number } }) =>
+        (b.public_metrics.retweet_count + b.public_metrics.like_count) -
+        (a.public_metrics.retweet_count + a.public_metrics.like_count)
+      )[0]
+      const username = data.includes?.users?.find((u: { id: string; username: string }) => u.id === best.author_id)?.username
+      return { id: best.id, url: `https://twitter.com/${username}/status/${best.id}` }
+    }
+  } catch (e) {
+    console.error("Tier 1 tweet search failed:", e)
+  }
+
+  // Fallback: any prominent tweet about the topic
+  const fallbackQuery = `(${keywordQuery}) -is:retweet lang:en has:links`
+  const fallbackUrl = `https://api.twitter.com/2/tweets/search/recent?query=${encode(fallbackQuery)}&max_results=10&tweet.fields=public_metrics,author_id&expansions=author_id&user.fields=username`
+
+  try {
+    const res = await fetch(fallbackUrl, {
+      headers: { Authorization: `Bearer ${bearerToken}` },
+    })
+    const data = await res.json()
+    if (data.data?.length > 0) {
+      const best = data.data.sort((a: { public_metrics: { retweet_count: number; like_count: number } }, b: { public_metrics: { retweet_count: number; like_count: number } }) =>
+        (b.public_metrics.retweet_count + b.public_metrics.like_count) -
+        (a.public_metrics.retweet_count + a.public_metrics.like_count)
+      )[0]
+      // Only use if it has meaningful engagement
+      const engagement = best.public_metrics.retweet_count + best.public_metrics.like_count
+      if (engagement < 10) return null
+      const username = data.includes?.users?.find((u: { id: string; username: string }) => u.id === best.author_id)?.username
+      return { id: best.id, url: `https://twitter.com/${username}/status/${best.id}` }
+    }
+  } catch (e) {
+    console.error("Fallback tweet search failed:", e)
+  }
+
+  return null
+}
+
 // ─── Find matching video ──────────────────────────────────────────────────────
 
 async function findMatchingVideo(trendEmbedding: number[]): Promise<string | null> {
@@ -268,6 +338,7 @@ async function sendTelegramApproval(draft: {
   partnerCitation: string
   approvalToken: string
   videoId: string | null
+  quoteTweetUrl: string | null
   trend: { headline: string; source: string }
 }) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN
@@ -298,6 +369,7 @@ async function sendTelegramApproval(draft: {
     ``,
     `*Drawing on:* ${partnerNames[draft.partner]}`,
     `_"${draft.partnerCitation.slice(0, 150)}..."_`,
+    draft.quoteTweetUrl ? `🔁 Will be posted as a quote-tweet: ${draft.quoteTweetUrl}` : `📝 No quote-tweet found — will post standalone`,
     draft.videoId ? `📎 Relevant video from library will be attached` : "",
     ``,
     `Reply *approve* to post both, *reject* to discard, or *feedback: [note]* to improve it.`,
@@ -356,7 +428,10 @@ export async function runAgentPipeline(): Promise<{ drafted: number; skipped: nu
 
   const { article, embedding: trendEmbedding, match } = best
 
-  const videoId = await findMatchingVideo(trendEmbedding)
+  const [videoId, quoteTweet] = await Promise.all([
+    findMatchingVideo(trendEmbedding),
+    findTweetToQuote(article.headline, article.summary),
+  ])
 
   const { hook, body } = await generateDraft(
     article,
@@ -374,6 +449,8 @@ export async function runAgentPipeline(): Promise<{ drafted: number; skipped: nu
       body,
       platform: "both",
       videoId,
+      quoteTweetId: quoteTweet?.id ?? null,
+      quoteTweetUrl: quoteTweet?.url ?? null,
       status: "pending",
     },
   })
@@ -396,6 +473,7 @@ export async function runAgentPipeline(): Promise<{ drafted: number; skipped: nu
     partnerCitation: match.citation,
     approvalToken: postDraft.approvalToken,
     videoId,
+    quoteTweetUrl: quoteTweet?.url ?? null,
     trend: { headline: article.headline, source: article.source },
   })
 

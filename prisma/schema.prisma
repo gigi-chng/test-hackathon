@@ -119,6 +119,8 @@ model PostDraft {
   body            String
   platform        String    @default("both") // twitter | linkedin | both
   videoId         String?
+  quoteTweetId    String?
+  quoteTweetUrl   String?
   status          String    @default("pending") // pending | approved | rejected | published
   approvalToken   String    @unique @default(cuid())
   feedback        String?
