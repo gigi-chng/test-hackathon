@@ -22,17 +22,27 @@ export type IntroClip = {
 export async function generateIntroClip(input: { transcript: string }): Promise<IntroClip> {
   const { transcript } = input
 
-  const prompt = `You are a podcast trailer producer. Your job is to find the single best moment from this transcript to use as an episode intro/teaser — a clip that makes someone stop and immediately want to listen to the full episode.
+  const prompt = `You are a content producer for a podcast aimed at VCs and tech founders. Your job is to find the single most compelling insight or take from this transcript that would stop a VC or tech founder mid-scroll — and turn it into a polished intro clip for the episode.
 
-This is NOT a Short about a topic. It is a TRAILER for the episode. The goal is one thing: make the viewer hit play on the full episode.
+AUDIENCE: Venture capitalists, startup founders, operators, and tech investors. They care about market dynamics, investment theses, company building, AI, founder psychology, and contrarian takes on where the industry is heading. They do NOT care about personal anecdotes, lifestyle content, or general observations unless they connect directly to a business or investment insight.
+
+GOAL: One thing — make a VC or founder immediately think "I need to hear the rest of this."
+
+CLIP SELECTION — find the moment that best fits ONE of these:
+- A sharp investment thesis or market call that hasn't been widely said yet
+- A counterintuitive take on AI, software, or the startup ecosystem
+- A specific data point or observation about how companies or markets are actually behaving
+- A founder or investor admitting something the industry doesn't usually say out loud
+- A prediction about where a specific sector is heading that most people would disagree with
+
+NEVER select: casual banter, lifestyle commentary, jokes without a business insight, or moments that require knowing the speakers personally to appreciate.
 
 RULES:
 - Under 60 seconds, ideally 30–50s
-- Must be the most entertaining, shocking, or surprisingly funny moment in the entire episode
-- Prioritize: unexpected admissions, strong opinions, funny exchanges, counterintuitive claims, or a moment where something gets genuinely heated
-- Must make complete sense with zero prior context — a stranger should be instantly hooked
-- End WITHOUT resolving the tension — cut right before the punchline or answer so the viewer has to listen to find out
-- The hook must land in 2 seconds flat
+- Must make complete sense with zero prior context
+- End WITHOUT fully resolving the argument — cut before the conclusion so they have to listen
+- Hook lands in 2 seconds flat
+- CLEAN THE TRANSCRIPT: Remove all filler words (um, uh, like, you know, I mean, sort of, kind of, right?), false starts, crosstalk, and repetitive phrasing from the core clip. Keep the meaning and speaker voice intact but make it tight and easy to follow. Mark cleaned sections with [edited for clarity].
 
 TRANSCRIPT:
 ${transcript}
@@ -41,21 +51,21 @@ ${transcript}
 
 Produce:
 
-1. TITLE — ALL CAPS, max 8 words. The single sharpest description of this moment.
+1. TITLE — ALL CAPS, max 8 words. Frame it as a market insight or bold take, not a description of a conversation.
 
-2. HOOK — Exact verbatim quote (0–3s). The first thing the viewer hears. Must work as a standalone sentence.
+2. HOOK — Exact quote (0–3s), cleaned of filler. The first thing the viewer hears. Must work as a standalone sentence that signals a sharp insight.
 
-3. CORE CLIP — Verbatim transcript excerpt, 30–59 seconds. Include speaker names.
+3. CORE CLIP — Cleaned transcript excerpt, 30–59 seconds. Include speaker names. Remove filler words, false starts, and crosstalk. Add [edited for clarity] where you've cleaned. This is what the editor cuts to.
 
-4. EDITING NOTES — 5–6 production instructions in Indonesian. Cover: on-screen text, words to highlight, pacing, close-up moments, and exactly where to cut to leave the ending unresolved.
+4. EDITING NOTES — 5–6 production instructions in Indonesian. Cover: on-screen text to add context for the VC/founder audience, words to highlight, pacing, and exactly where to cut to leave the argument unresolved.
 
-5. CTA LINE — In Indonesian. Instruction for what text to show on screen at the end, teasing the full episode without giving away the answer.
+5. CTA LINE — In Indonesian. What text to show on screen at the end, specifically calling out that the full argument/thesis is in the episode.
 
 6. TIMESTAMP — Estimated position (e.g. "~12:00–13:30").
 
 7. DURATION — Estimated length (e.g. "~45s").
 
-8. WHY THIS ONE — 1–2 sentences in Indonesian explaining why this specific moment was chosen over everything else in the episode.
+8. WHY THIS ONE — 1–2 sentences in Indonesian explaining why this insight will resonate specifically with VCs and founders, and what makes it worth 30 minutes of their time.
 
 Return ONLY valid JSON:
 {
