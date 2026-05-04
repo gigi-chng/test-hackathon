@@ -121,6 +121,7 @@ model PostDraft {
   videoId         String?
   quoteTweetId    String?
   quoteTweetUrl   String?
+  partnerSourceUrl String?
   status          String    @default("pending") // pending | approved | rejected | published
   approvalToken   String    @unique @default(cuid())
   feedback        String?

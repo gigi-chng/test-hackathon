@@ -451,6 +451,7 @@ export async function runAgentPipeline(): Promise<{ drafted: number; skipped: nu
       videoId,
       quoteTweetId: quoteTweet?.id ?? null,
       quoteTweetUrl: quoteTweet?.url ?? null,
+      partnerSourceUrl: match.sourceUrl ?? null,
       status: "pending",
     },
   })

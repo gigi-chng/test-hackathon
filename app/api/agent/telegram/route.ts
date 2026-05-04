@@ -74,7 +74,7 @@ async function sendTelegramMessage(chatId: string, text: string) {
   })
 }
 
-async function publishDraft(draft: { hook: string; body: string; videoId: string | null; quoteTweetId?: string | null }) {
+async function publishDraft(draft: { hook: string; body: string; videoId: string | null; quoteTweetId?: string | null; partnerSourceUrl?: string | null }) {
   const twitterText = draft.hook  // hook = twitter post
   const linkedinText = draft.body // body = linkedin post
   const results: { twitter: boolean; linkedin: boolean; linkedinError?: string } = { twitter: false, linkedin: false }
@@ -86,6 +86,7 @@ async function publishDraft(draft: { hook: string; body: string; videoId: string
 
   if (twitterKey && twitterSecret && twitterToken && twitterTokenSecret) {
     try {
+      // Post main tweet
       const tweetPayload: Record<string, unknown> = { text: twitterText.slice(0, 280) }
       if (draft.quoteTweetId) tweetPayload.quote_tweet_id = draft.quoteTweetId
       const body = JSON.stringify(tweetPayload)
@@ -99,7 +100,29 @@ async function publishDraft(draft: { hook: string; body: string; videoId: string
         body,
       })
       results.twitter = res.ok
-      if (!res.ok) console.error("Twitter error:", await res.text())
+      if (!res.ok) {
+        console.error("Twitter error:", await res.text())
+      } else if (draft.partnerSourceUrl) {
+        // Reply with the partner's original source as first reply in thread
+        const tweetData = await res.json()
+        const mainTweetId = tweetData?.data?.id
+        if (mainTweetId) {
+          const replyText = `Full thinking here: ${draft.partnerSourceUrl}`
+          const replyPayload = JSON.stringify({
+            text: replyText,
+            reply: { in_reply_to_tweet_id: mainTweetId },
+          })
+          const replyAuth = await buildTwitterOAuthHeader(
+            "POST", "https://api.twitter.com/2/tweets", replyPayload,
+            { twitterKey, twitterSecret, twitterToken, twitterTokenSecret }
+          )
+          await fetch("https://api.twitter.com/2/tweets", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: replyAuth },
+            body: replyPayload,
+          })
+        }
+      }
     } catch (e) {
       console.error("Twitter publish error:", e)
     }
