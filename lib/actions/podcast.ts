@@ -2,6 +2,10 @@
 
 import Anthropic from "@anthropic-ai/sdk"
 
+export async function verifyEditorPassword(password: string): Promise<boolean> {
+  return password === process.env.EDITOR_PASSWORD
+}
+
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 export type ClipBrief = {

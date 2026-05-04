@@ -1,14 +1,32 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { generateClipBriefs, type ClipBriefDoc } from "@/lib/actions/podcast"
-import { FileText, Copy, Check } from "lucide-react"
+import { generateClipBriefs, verifyEditorPassword, type ClipBriefDoc } from "@/lib/actions/podcast"
+import { FileText, Copy, Check, Lock } from "lucide-react"
 
 export default function PodcastToolsPage() {
+  const [unlocked, setUnlocked] = useState(false)
+  const [password, setPassword] = useState("")
+  const [passwordError, setPasswordError] = useState(false)
   const [transcript, setTranscript] = useState("")
+
+  useEffect(() => {
+    if (localStorage.getItem("editor_unlocked") === "true") setUnlocked(true)
+  }, [])
+
+  async function handleUnlock() {
+    const ok = await verifyEditorPassword(password)
+    if (ok) {
+      localStorage.setItem("editor_unlocked", "true")
+      setUnlocked(true)
+    } else {
+      setPasswordError(true)
+      setPassword("")
+    }
+  }
   const [loading, setLoading] = useState(false)
   const [briefDoc, setBriefDoc] = useState<ClipBriefDoc | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -67,6 +85,35 @@ export default function PodcastToolsPage() {
     })
 
     return lines.join("\n")
+  }
+
+  if (!unlocked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <Card className="w-full max-w-sm">
+          <CardContent className="pt-8 pb-8 flex flex-col items-center gap-4">
+            <Lock className="h-8 w-8 text-muted-foreground" />
+            <div className="text-center">
+              <h2 className="font-semibold text-lg">Clip Brief Generator</h2>
+              <p className="text-sm text-muted-foreground mt-1">Enter the password to continue</p>
+            </div>
+            <div className="w-full flex flex-col gap-2">
+              <input
+                type="password"
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => { setPassword(e.target.value); setPasswordError(false) }}
+                onKeyDown={(e) => e.key === "Enter" && handleUnlock()}
+                autoFocus
+              />
+              {passwordError && <p className="text-xs text-destructive">Incorrect password</p>}
+              <Button onClick={handleUnlock} className="w-full">Enter</Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
