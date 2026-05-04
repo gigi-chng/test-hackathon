@@ -394,9 +394,6 @@ async function sendTelegramApproval(draft: {
 // ─── Main: run the full agent pipeline ───────────────────────────────────────
 
 export async function runAgentPipeline(): Promise<{ drafted: number; skipped: number; reason?: string }> {
-  if (await weeklyCapReached()) {
-    return { drafted: 0, skipped: 0, reason: "Weekly cap of 3 drafts reached" }
-  }
 
   // Refresh knowledge base every Monday
   const today = new Date()
