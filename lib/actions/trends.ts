@@ -120,12 +120,17 @@ async function isDuplicate(trendEmbedding: number[]): Promise<boolean> {
 // ─── Check weekly draft cap ───────────────────────────────────────────────────
 
 async function weeklyCapReached(): Promise<boolean> {
-  const weekStart = new Date()
-  weekStart.setDate(weekStart.getDate() - weekStart.getDay())
-  weekStart.setHours(0, 0, 0, 0)
+  const now = new Date()
+  const day = now.getDay() // 0 = Sun, 1 = Mon ...
+  const monday = new Date(now)
+  monday.setDate(now.getDate() - ((day + 6) % 7)) // roll back to Monday
+  monday.setHours(0, 0, 0, 0)
 
   const count = await prisma.postDraft.count({
-    where: { createdAt: { gte: weekStart } },
+    where: {
+      createdAt: { gte: monday },
+      status: { in: ["pending", "published"] }, // don't count rejected drafts
+    },
   })
   return count >= 3
 }
