@@ -4,6 +4,150 @@ import Anthropic from "@anthropic-ai/sdk"
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+export type ClipBrief = {
+  title: string
+  hook: string
+  coreClip: string
+  editingNotes: string[]
+  ctaLine: string
+  cliffhanger: string
+  timestamp: string
+  duration: string
+}
+
+export type ClipBriefDoc = {
+  episodeName: string
+  generatedDate: string
+  speakers: string[]
+  clips: ClipBrief[]
+}
+
+async function fetchTrendingHeadlines(): Promise<string[]> {
+  const apiKey = process.env.NEWS_API_KEY
+  if (!apiKey) return []
+
+  const queries = ["venture capital", "AI startup", "tech founder", "artificial intelligence"]
+  const headlines: string[] = []
+  const seen = new Set<string>()
+
+  for (const q of queries) {
+    const url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(q)}&sortBy=publishedAt&pageSize=5&language=en&apiKey=${apiKey}`
+    const res = await fetch(url, { next: { revalidate: 0 } })
+    const data = await res.json()
+    if (data.articles) {
+      for (const a of data.articles) {
+        if (!a.title || a.title === "[Removed]" || seen.has(a.title)) continue
+        seen.add(a.title)
+        headlines.push(a.title)
+      }
+    }
+  }
+
+  return headlines.slice(0, 15)
+}
+
+export async function generateClipBriefs(input: {
+  transcript: string
+  episodeName: string
+  speakers: string
+}): Promise<ClipBriefDoc> {
+  const { transcript, episodeName, speakers } = input
+
+  const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+  const headlines = await fetchTrendingHeadlines()
+  const headlinesSection = headlines.length > 0
+    ? `\nTODAY'S TRENDING NEWS (use this to prioritize clips that connect to what's happening right now):\n${headlines.map((h, i) => `${i + 1}. ${h}`).join("\n")}\n`
+    : ""
+
+  const prompt = `You are a YouTube Shorts producer for a podcast. Your job is to find the TOP 5 moments from this transcript that will perform best as Shorts — and write a production brief for each that a video editor can execute directly.
+
+Your two goals for every clip:
+1. STOP THE SCROLL — the hook must work within 2 seconds with zero context
+2. DRIVE TO THE FULL EPISODE — the clip should leave the viewer wanting more, not satisfied
+
+YOUTUBE SHORTS PERFORMANCE RULES:
+- Hook works in 1–2 seconds or the viewer is gone
+- Ideal length: 30–59 seconds. Never over 60s.
+- Every clip needs a clear arc: setup → tension → payoff OR setup → tension → cliffhanger (cut before the answer)
+- Cliffhanger endings outperform resolved endings for driving full-episode clicks
+- Controversy, counterintuitive takes, and strong opinions drive comments = more distribution
+- Re-watch value: a stat, a reversal, or a line people want to send to someone
+- Vertical format: note when to cut to close-up reactions or faces
+- SELF-CONTAINED: the clip must make complete sense to someone who has never heard of this podcast, these speakers, or this topic. No assumed context. If a clip references something discussed earlier in the episode, either exclude it or note in editing notes what on-screen text is needed to give viewers the context they need.
+
+Speakers: ${speakers}
+${headlinesSection}
+TRANSCRIPT:
+${transcript}
+
+---
+
+For each clip produce:
+
+1. TITLE — ALL CAPS, max 8 words. The sharpest possible description of the moment.
+
+2. HOOK — Exact quote from transcript (0–3s). Must work as a standalone sentence with no context. This is what appears on screen as the first thing viewers read/hear.
+
+3. CORE CLIP — Verbatim transcript excerpt, 30–59 seconds. Include speaker names. This is what the editor cuts to.
+
+4. EDITING NOTES — 5–6 production instructions written in Indonesian. Cover: on-screen text, words to highlight, pacing, close-up moments, where to cut, and how to end the clip. Always note which trending news story this connects to if relevant.
+
+5. CTA LINE — A single line of on-screen text shown in the final 3 seconds that drives viewers to the full episode. Should create urgency or curiosity. Example: "The full argument gets darker. Full episode in bio." or "They go much deeper on this. Link in bio."
+
+6. CLIFFHANGER — If the clip can be cut 5–10 seconds early to leave something unresolved, describe exactly where to cut and what question it leaves hanging. This is the single most effective driver of full-episode clicks.
+
+7. TIMESTAMP — Estimated position in episode (e.g. "~7:30–9:00").
+
+8. DURATION — Estimated clip length (e.g. "~45s").
+
+SELECTION CRITERIA — rank exactly 5 clips by Shorts potential. Prioritize:
+1. SELF-CONTAINED — the clip makes complete sense with zero prior context. Disqualify any moment that requires knowing what was said earlier in the episode unless the editing notes can fix it with on-screen text.
+2. TIMELY — connects to today's trending news. Algorithm boosts timely content.
+3. HOOK STRENGTH — opening line needs zero setup
+4. CLIFFHANGER POTENTIAL — moments where cutting early creates irresistible curiosity
+5. TENSION/SURPRISE — stat, reversal, or disagreement that stops scrolling
+6. SHAREABILITY — the clip someone sends to a friend
+
+Only include clips under 60 seconds. If a great moment runs long, note exactly where to cut it.
+
+Return ONLY valid JSON:
+{
+  "clips": [
+    {
+      "title": "CLIP TITLE IN ALL CAPS",
+      "hook": "Exact opening line from transcript",
+      "coreClip": "Full verbatim transcript excerpt...",
+      "editingNotes": ["catatan 1", "catatan 2", "catatan 3", "catatan 4", "catatan 5"],
+      "ctaLine": "Single line driving to full episode",
+      "cliffhanger": "Cut at [exact moment] — leaves viewer wondering [what question]",
+      "timestamp": "~7:30–9:00",
+      "duration": "~45s"
+    }
+  ]
+}`
+
+  const response = await client.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 6000,
+    messages: [{ role: "user", content: prompt }],
+  })
+
+  const textBlock = response.content.find((b) => b.type === "text")
+  if (!textBlock || textBlock.type !== "text") throw new Error("No text response")
+
+  const raw = textBlock.text.trim().replace(/^```json\n?/, "").replace(/\n?```$/, "")
+  const parsed = JSON.parse(raw)
+
+  const speakerList = speakers.split(",").map((s: string) => s.trim()).filter(Boolean)
+
+  return {
+    episodeName,
+    generatedDate: today,
+    speakers: speakerList,
+    clips: parsed.clips,
+  }
+}
+
 export type PodcastResults = {
   titles: { title: string; format: string }[]
   thumbnails: { title: string; options: string[] }[]

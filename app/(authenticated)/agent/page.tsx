@@ -96,8 +96,8 @@ export default function AgentPage() {
       setPipelineResult(res)
       setPipelineStatus("done")
       await loadDrafts()
-    } catch {
-      setError("Pipeline failed. Check NEWS_API_KEY and RESEND_API_KEY.")
+    } catch (e) {
+      setError(`Pipeline failed: ${e instanceof Error ? e.message : String(e)}`)
       setPipelineStatus("error")
     }
   }

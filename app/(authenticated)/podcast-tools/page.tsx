@@ -2,34 +2,28 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { generatePodcastAssets, type PodcastResults } from "@/lib/actions/podcast"
-import { Sparkles, Copy, Check } from "lucide-react"
+import { generateClipBriefs, type ClipBriefDoc } from "@/lib/actions/podcast"
+import { FileText, Copy, Check } from "lucide-react"
 
 export default function PodcastToolsPage() {
   const [transcript, setTranscript] = useState("")
-  const [episodeNumber, setEpisodeNumber] = useState("")
   const [loading, setLoading] = useState(false)
-  const [results, setResults] = useState<PodcastResults | null>(null)
+  const [briefDoc, setBriefDoc] = useState<ClipBriefDoc | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<"titles" | "thumbnails" | "description" | "clips">("titles")
 
   async function handleGenerate() {
     if (!transcript.trim()) return
     setLoading(true)
     setError(null)
-    setResults(null)
+    setBriefDoc(null)
     try {
-      const data = await generatePodcastAssets({ transcript, episodeNumber })
-      setResults(data)
-      setActiveTab("titles")
+      const data = await generateClipBriefs({ transcript, episodeName: "Podcast", speakers: "" })
+      setBriefDoc(data)
     } catch (e) {
-      setError("Something went wrong. Check your API key and try again.")
-      console.error(e)
+      setError(`Something went wrong: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setLoading(false)
     }
@@ -41,144 +35,139 @@ export default function PodcastToolsPage() {
     setTimeout(() => setCopied(null), 2000)
   }
 
-  const tabs = [
-    { id: "titles", label: "Titles" },
-    { id: "thumbnails", label: "Thumbnails" },
-    { id: "description", label: "Description" },
-    { id: "clips", label: "Viral Clips" },
-  ] as const
+  function formatFullDoc(doc: ClipBriefDoc): string {
+    const lines: string[] = []
+    lines.push(`CLIP RECOMMENDATIONS`)
+    lines.push(`Generated: ${doc.generatedDate}`)
+    lines.push("")
+
+    doc.clips.forEach((clip, i) => {
+      const border = "═".repeat(51)
+      lines.push(border)
+      lines.push(`CLIP ${i + 1}: "${clip.title}"`)
+      lines.push(border)
+      lines.push("")
+      lines.push(`HOOK (0–3s):`)
+      lines.push(`"${clip.hook}"`)
+      lines.push("")
+      lines.push(`CORE CLIP (${clip.duration}):`)
+      lines.push(clip.coreClip)
+      lines.push("")
+      lines.push(`CATATAN EDITING:`)
+      clip.editingNotes.forEach((note) => lines.push(`- ${note}`))
+      lines.push("")
+      lines.push(`CTA (3 detik terakhir):`)
+      lines.push(clip.ctaLine)
+      lines.push("")
+      lines.push(`CLIFFHANGER:`)
+      lines.push(clip.cliffhanger)
+      lines.push("")
+      lines.push(`Timestamp: ${clip.timestamp}`)
+      lines.push("")
+    })
+
+    return lines.join("\n")
+  }
 
   return (
     <div className="min-h-screen p-6 flex flex-col items-center gap-6">
       <div className="w-full max-w-3xl">
-        <h1 className="text-3xl font-bold mb-1">Podcast Publishing Toolkit</h1>
-        <p className="text-muted-foreground mb-6">Paste your transcript and get titles, thumbnails, descriptions, and viral clips — instantly.</p>
+        <h1 className="text-3xl font-bold mb-1">Clip Brief Generator</h1>
+        <p className="text-muted-foreground mb-6">Paste a transcript and get the top 5 YouTube Shorts-optimized clip briefs for your editor.</p>
 
-        {/* Input form */}
         <Card className="mb-6">
           <CardContent className="pt-6 flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="ep">Episode #</Label>
-              <Input id="ep" placeholder="e.g. 47" value={episodeNumber} onChange={(e) => setEpisodeNumber(e.target.value)} className="max-w-[160px]" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="transcript">Transcript</Label>
-              <textarea
-                id="transcript"
-                className="min-h-[180px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
-                placeholder="Paste your full episode transcript here..."
-                value={transcript}
-                onChange={(e) => setTranscript(e.target.value)}
-              />
-            </div>
-            <Button onClick={handleGenerate} disabled={loading || !transcript.trim()} className="w-full">
-              <Sparkles className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-              {loading ? "Generating assets..." : "Generate All Assets"}
+            <textarea
+              className="min-h-[220px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+              placeholder="Paste your full episode transcript here..."
+              value={transcript}
+              onChange={(e) => setTranscript(e.target.value)}
+            />
+            <Button onClick={handleGenerate} disabled={loading || !transcript.trim()}>
+              <FileText className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              {loading ? "Analysing transcript..." : "Generate Clip Briefs"}
             </Button>
             {error && <p className="text-sm text-destructive">{error}</p>}
           </CardContent>
         </Card>
 
-        {/* Results */}
-        {results && (
+        {briefDoc && (
           <div className="flex flex-col gap-4">
-            {/* Tabs */}
-            <div className="flex gap-2 border-b pb-2">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                    activeTab === tab.id
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">Top {briefDoc.clips.length} clips — ranked by Shorts performance</p>
+              <Button variant="outline" size="sm" onClick={() => copyText(formatFullDoc(briefDoc), "full-doc")}>
+                {copied === "full-doc" ? <><Check className="h-3 w-3 mr-1" />Copied</> : <><Copy className="h-3 w-3 mr-1" />Copy full doc</>}
+              </Button>
             </div>
 
-            {/* Titles tab */}
-            {activeTab === "titles" && (
-              <div className="flex flex-col gap-3">
-                <p className="text-sm text-muted-foreground">8 title formats modelled on Freakonomics, Planet Money & More or Less. Click to copy.</p>
-                {results.titles.map((t, i) => (
-                  <Card key={i} className="cursor-pointer hover:border-primary transition-colors" onClick={() => copyText(t.title, `title-${i}`)}>
-                    <CardContent className="py-3 px-4 flex items-center justify-between gap-3">
-                      <div className="flex flex-col gap-1">
-                        <p className="font-medium">{t.title}</p>
-                        <Badge variant="secondary" className="w-fit text-xs">{t.format}</Badge>
-                      </div>
-                      {copied === `title-${i}` ? <Check className="h-4 w-4 text-green-500 shrink-0" /> : <Copy className="h-4 w-4 text-muted-foreground shrink-0" />}
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
+            {briefDoc.clips.map((clip, i) => (
+              <Card key={i}>
+                <CardContent className="pt-5 pb-5 flex flex-col gap-4">
 
-            {/* Thumbnails tab */}
-            {activeTab === "thumbnails" && (
-              <div className="flex flex-col gap-4">
-                <p className="text-sm text-muted-foreground">3 thumbnail text options per title — stat, question, bold claim. Click to copy.</p>
-                {results.thumbnails.map((group, i) => (
-                  <Card key={i}>
-                    <CardHeader className="pb-2 pt-4">
-                      <CardTitle className="text-sm font-normal text-muted-foreground">{group.title}</CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex flex-wrap gap-2 pb-4">
-                      {group.options.map((opt, j) => (
-                        <button
-                          key={j}
-                          onClick={() => copyText(opt, `thumb-${i}-${j}`)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-sm font-bold hover:border-primary transition-colors"
-                        >
-                          {opt}
-                          {copied === `thumb-${i}-${j}` ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3 text-muted-foreground" />}
-                        </button>
-                      ))}
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-
-            {/* Description tab */}
-            {activeTab === "description" && (
-              <Card>
-                <CardContent className="pt-4 flex flex-col gap-3">
-                  <div className="flex justify-between items-center">
-                    <p className="text-sm text-muted-foreground">YouTube / Spotify description with chapters</p>
-                    <Button variant="outline" size="sm" onClick={() => copyText(results.description, "desc")}>
-                      {copied === "desc" ? <><Check className="h-3 w-3 mr-1" /> Copied</> : <><Copy className="h-3 w-3 mr-1" /> Copy all</>}
-                    </Button>
+                  {/* Header */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">CLIP {i + 1}</p>
+                      <p className="font-bold text-base">"{clip.title}"</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge variant="outline">{clip.timestamp}</Badge>
+                      <Badge variant="secondary">{clip.duration}</Badge>
+                    </div>
                   </div>
-                  <pre className="whitespace-pre-wrap text-sm bg-muted rounded-md p-4 font-mono leading-relaxed">{results.description}</pre>
+
+                  {/* Hook */}
+                  <div className="bg-muted rounded-md px-4 py-3">
+                    <p className="text-xs font-semibold text-muted-foreground mb-1">HOOK (0–3s)</p>
+                    <p className="text-sm italic">"{clip.hook}"</p>
+                  </div>
+
+                  {/* Core clip */}
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground mb-2">CORE CLIP</p>
+                    <pre className="whitespace-pre-wrap text-sm leading-relaxed font-sans border rounded-md px-4 py-3 bg-background">{clip.coreClip}</pre>
+                  </div>
+
+                  {/* Editing notes */}
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground mb-2">CATATAN EDITING</p>
+                    <ul className="flex flex-col gap-1.5">
+                      {clip.editingNotes.map((note, j) => (
+                        <li key={j} className="text-sm flex gap-2">
+                          <span className="text-muted-foreground shrink-0">–</span>
+                          <span>{note}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* CTA + Cliffhanger */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="border rounded-md px-4 py-3">
+                      <p className="text-xs font-semibold text-muted-foreground mb-1">CTA (3 DETIK TERAKHIR)</p>
+                      <p className="text-sm">{clip.ctaLine}</p>
+                    </div>
+                    <div className="border rounded-md px-4 py-3 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
+                      <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-1">CLIFFHANGER</p>
+                      <p className="text-sm">{clip.cliffhanger}</p>
+                    </div>
+                  </div>
+
+                  {/* Copy button */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="self-end"
+                    onClick={() => {
+                      const text = `CLIP ${i + 1}: "${clip.title}"\n\nHOOK (0–3s):\n"${clip.hook}"\n\nCORE CLIP (${clip.duration}):\n${clip.coreClip}\n\nCATATAN EDITING:\n${clip.editingNotes.map(n => `- ${n}`).join("\n")}\n\nCTA: ${clip.ctaLine}\n\nCLIFFHANGER: ${clip.cliffhanger}\n\nTimestamp: ${clip.timestamp}`
+                      copyText(text, `brief-${i}`)
+                    }}
+                  >
+                    {copied === `brief-${i}` ? <><Check className="h-3 w-3 mr-1" />Copied</> : <><Copy className="h-3 w-3 mr-1" />Copy clip</>}
+                  </Button>
                 </CardContent>
               </Card>
-            )}
-
-            {/* Clips tab */}
-            {activeTab === "clips" && (
-              <div className="flex flex-col gap-3">
-                <p className="text-sm text-muted-foreground">Top 5 moments with the highest viral potential.</p>
-                {results.clips.map((clip, i) => (
-                  <Card key={i}>
-                    <CardContent className="pt-4 pb-4 flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
-                        <Badge variant="outline">{clip.timestamp}</Badge>
-                        <button onClick={() => copyText(clip.suggestedTitle, `clip-${i}`)} className="text-muted-foreground hover:text-foreground">
-                          {copied === `clip-${i}` ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                        </button>
-                      </div>
-                      <p className="font-semibold text-sm">{clip.suggestedTitle}</p>
-                      <p className="text-sm text-muted-foreground italic">"{clip.quote}"</p>
-                      <p className="text-xs text-muted-foreground border-t pt-2">{clip.reason}</p>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
+            ))}
           </div>
         )}
       </div>
