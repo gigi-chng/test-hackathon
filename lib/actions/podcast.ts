@@ -8,6 +8,80 @@ export async function verifyEditorPassword(password: string): Promise<boolean> {
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+export type IntroClip = {
+  title: string
+  hook: string
+  coreClip: string
+  editingNotes: string[]
+  ctaLine: string
+  timestamp: string
+  duration: string
+  whyThisOne: string
+}
+
+export async function generateIntroClip(input: { transcript: string }): Promise<IntroClip> {
+  const { transcript } = input
+
+  const prompt = `You are a podcast trailer producer. Your job is to find the single best moment from this transcript to use as an episode intro/teaser — a clip that makes someone stop and immediately want to listen to the full episode.
+
+This is NOT a Short about a topic. It is a TRAILER for the episode. The goal is one thing: make the viewer hit play on the full episode.
+
+RULES:
+- Under 60 seconds, ideally 30–50s
+- Must be the most entertaining, shocking, or surprisingly funny moment in the entire episode
+- Prioritize: unexpected admissions, strong opinions, funny exchanges, counterintuitive claims, or a moment where something gets genuinely heated
+- Must make complete sense with zero prior context — a stranger should be instantly hooked
+- End WITHOUT resolving the tension — cut right before the punchline or answer so the viewer has to listen to find out
+- The hook must land in 2 seconds flat
+
+TRANSCRIPT:
+${transcript}
+
+---
+
+Produce:
+
+1. TITLE — ALL CAPS, max 8 words. The single sharpest description of this moment.
+
+2. HOOK — Exact verbatim quote (0–3s). The first thing the viewer hears. Must work as a standalone sentence.
+
+3. CORE CLIP — Verbatim transcript excerpt, 30–59 seconds. Include speaker names.
+
+4. EDITING NOTES — 5–6 production instructions in Indonesian. Cover: on-screen text, words to highlight, pacing, close-up moments, and exactly where to cut to leave the ending unresolved.
+
+5. CTA LINE — In Indonesian. Instruction for what text to show on screen at the end, teasing the full episode without giving away the answer.
+
+6. TIMESTAMP — Estimated position (e.g. "~12:00–13:30").
+
+7. DURATION — Estimated length (e.g. "~45s").
+
+8. WHY THIS ONE — 1–2 sentences in Indonesian explaining why this specific moment was chosen over everything else in the episode.
+
+Return ONLY valid JSON:
+{
+  "title": "CLIP TITLE IN ALL CAPS",
+  "hook": "Exact opening line",
+  "coreClip": "Verbatim transcript excerpt...",
+  "editingNotes": ["catatan 1", "catatan 2", "catatan 3", "catatan 4", "catatan 5"],
+  "ctaLine": "Instruksi CTA dalam bahasa Indonesia",
+  "timestamp": "~12:00–13:30",
+  "duration": "~45s",
+  "whyThisOne": "Alasan dalam bahasa Indonesia"
+}`
+
+  const response = await client.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 3000,
+    messages: [{ role: "user", content: prompt }],
+  })
+
+  const textBlock = response.content.find((b) => b.type === "text")
+  if (!textBlock || textBlock.type !== "text") throw new Error("No text response")
+
+  const raw = textBlock.text.trim().replace(/^```json\n?/, "").replace(/\n?```$/, "")
+  return JSON.parse(raw) as IntroClip
+}
+
 export type ClipBrief = {
   title: string
   hook: string

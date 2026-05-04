@@ -4,14 +4,20 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { generateClipBriefs, verifyEditorPassword, type ClipBriefDoc } from "@/lib/actions/podcast"
-import { FileText, Copy, Check, Lock } from "lucide-react"
+import { generateClipBriefs, generateIntroClip, verifyEditorPassword, type ClipBriefDoc, type IntroClip } from "@/lib/actions/podcast"
+import { FileText, Copy, Check, Lock, Clapperboard } from "lucide-react"
 
 export default function PodcastToolsPage() {
   const [unlocked, setUnlocked] = useState(false)
   const [password, setPassword] = useState("")
   const [passwordError, setPasswordError] = useState(false)
   const [transcript, setTranscript] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [introLoading, setIntroLoading] = useState(false)
+  const [briefDoc, setBriefDoc] = useState<ClipBriefDoc | null>(null)
+  const [introClip, setIntroClip] = useState<IntroClip | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState<string | null>(null)
 
   useEffect(() => {
     if (localStorage.getItem("editor_unlocked") === "true") setUnlocked(true)
@@ -27,10 +33,6 @@ export default function PodcastToolsPage() {
       setPassword("")
     }
   }
-  const [loading, setLoading] = useState(false)
-  const [briefDoc, setBriefDoc] = useState<ClipBriefDoc | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [copied, setCopied] = useState<string | null>(null)
 
   async function handleGenerate() {
     if (!transcript.trim()) return
@@ -47,6 +49,21 @@ export default function PodcastToolsPage() {
     }
   }
 
+  async function handleGenerateIntro() {
+    if (!transcript.trim()) return
+    setIntroLoading(true)
+    setError(null)
+    setIntroClip(null)
+    try {
+      const data = await generateIntroClip({ transcript })
+      setIntroClip(data)
+    } catch (e) {
+      setError(`Something went wrong: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setIntroLoading(false)
+    }
+  }
+
   function copyText(text: string, id: string) {
     navigator.clipboard.writeText(text)
     setCopied(id)
@@ -58,32 +75,19 @@ export default function PodcastToolsPage() {
     lines.push(`CLIP RECOMMENDATIONS`)
     lines.push(`Generated: ${doc.generatedDate}`)
     lines.push("")
-
     doc.clips.forEach((clip, i) => {
       const border = "═".repeat(51)
       lines.push(border)
       lines.push(`CLIP ${i + 1}: "${clip.title}"`)
       lines.push(border)
       lines.push("")
-      lines.push(`HOOK (0–3s):`)
-      lines.push(`"${clip.hook}"`)
-      lines.push("")
-      lines.push(`CORE CLIP (${clip.duration}):`)
-      lines.push(clip.coreClip)
-      lines.push("")
-      lines.push(`CATATAN EDITING:`)
-      clip.editingNotes.forEach((note) => lines.push(`- ${note}`))
-      lines.push("")
-      lines.push(`CTA (3 detik terakhir):`)
-      lines.push(clip.ctaLine)
-      lines.push("")
-      lines.push(`CLIFFHANGER:`)
-      lines.push(clip.cliffhanger)
-      lines.push("")
-      lines.push(`Timestamp: ${clip.timestamp}`)
-      lines.push("")
+      lines.push(`HOOK (0–3s):\n"${clip.hook}"\n`)
+      lines.push(`CORE CLIP (${clip.duration}):\n${clip.coreClip}\n`)
+      lines.push(`CATATAN EDITING:\n${clip.editingNotes.map(n => `- ${n}`).join("\n")}\n`)
+      lines.push(`CTA: ${clip.ctaLine}\n`)
+      lines.push(`CLIFFHANGER: ${clip.cliffhanger}\n`)
+      lines.push(`Timestamp: ${clip.timestamp}\n`)
     })
-
     return lines.join("\n")
   }
 
@@ -120,7 +124,7 @@ export default function PodcastToolsPage() {
     <div className="min-h-screen p-6 flex flex-col items-center gap-6">
       <div className="w-full max-w-3xl">
         <h1 className="text-3xl font-bold mb-1">Clip Brief Generator</h1>
-        <p className="text-muted-foreground mb-6">Paste a transcript and get the top 5 YouTube Shorts-optimized clip briefs for your editor.</p>
+        <p className="text-muted-foreground mb-6">Paste a transcript and get the top 5 Shorts briefs or a single episode intro clip.</p>
 
         <Card className="mb-6">
           <CardContent className="pt-6 flex flex-col gap-4">
@@ -130,18 +134,88 @@ export default function PodcastToolsPage() {
               value={transcript}
               onChange={(e) => setTranscript(e.target.value)}
             />
-            <Button onClick={handleGenerate} disabled={loading || !transcript.trim()}>
-              <FileText className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-              {loading ? "Analysing transcript..." : "Generate Clip Briefs"}
-            </Button>
+            <div className="grid grid-cols-2 gap-3">
+              <Button onClick={handleGenerate} disabled={loading || !transcript.trim()}>
+                <FileText className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                {loading ? "Analysing..." : "Top 5 Shorts Clips"}
+              </Button>
+              <Button onClick={handleGenerateIntro} disabled={introLoading || !transcript.trim()} variant="outline">
+                <Clapperboard className={`mr-2 h-4 w-4 ${introLoading ? "animate-spin" : ""}`} />
+                {introLoading ? "Finding best moment..." : "Episode Intro Clip"}
+              </Button>
+            </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
           </CardContent>
         </Card>
 
+        {/* Intro clip result */}
+        {introClip && (
+          <div className="flex flex-col gap-4 mb-6">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold">Episode Intro Clip</p>
+              <Button variant="outline" size="sm" onClick={() => copyText(
+                `INTRO CLIP: "${introClip.title}"\n\nHOOK (0–3s):\n"${introClip.hook}"\n\nCORE CLIP (${introClip.duration}):\n${introClip.coreClip}\n\nCATATAN EDITING:\n${introClip.editingNotes.map(n => `- ${n}`).join("\n")}\n\nCTA: ${introClip.ctaLine}\n\nKenapa ini: ${introClip.whyThisOne}\n\nTimestamp: ${introClip.timestamp}`,
+                "intro-copy"
+              )}>
+                {copied === "intro-copy" ? <><Check className="h-3 w-3 mr-1" />Copied</> : <><Copy className="h-3 w-3 mr-1" />Copy</>}
+              </Button>
+            </div>
+
+            <Card className="border-primary">
+              <CardContent className="pt-5 pb-5 flex flex-col gap-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">INTRO CLIP</p>
+                    <p className="font-bold text-base">"{introClip.title}"</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Badge variant="outline">{introClip.timestamp}</Badge>
+                    <Badge variant="secondary">{introClip.duration}</Badge>
+                  </div>
+                </div>
+
+                <div className="bg-muted rounded-md px-4 py-3">
+                  <p className="text-xs font-semibold text-muted-foreground mb-1">HOOK (0–3s)</p>
+                  <p className="text-sm italic">"{introClip.hook}"</p>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">CORE CLIP</p>
+                  <pre className="whitespace-pre-wrap text-sm leading-relaxed font-sans border rounded-md px-4 py-3 bg-background">{introClip.coreClip}</pre>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">CATATAN EDITING</p>
+                  <ul className="flex flex-col gap-1.5">
+                    {introClip.editingNotes.map((note, j) => (
+                      <li key={j} className="text-sm flex gap-2">
+                        <span className="text-muted-foreground shrink-0">–</span>
+                        <span>{note}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="border rounded-md px-4 py-3">
+                    <p className="text-xs font-semibold text-muted-foreground mb-1">CTA</p>
+                    <p className="text-sm">{introClip.ctaLine}</p>
+                  </div>
+                  <div className="border rounded-md px-4 py-3 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
+                    <p className="text-xs font-semibold text-blue-700 dark:text-blue-400 mb-1">KENAPA INI?</p>
+                    <p className="text-sm">{introClip.whyThisOne}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Shorts clips */}
         {briefDoc && (
           <div className="flex flex-col gap-4">
             <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">Top {briefDoc.clips.length} clips — ranked by Shorts performance</p>
+              <p className="text-sm font-semibold">Top {briefDoc.clips.length} Shorts Clips</p>
               <Button variant="outline" size="sm" onClick={() => copyText(formatFullDoc(briefDoc), "full-doc")}>
                 {copied === "full-doc" ? <><Check className="h-3 w-3 mr-1" />Copied</> : <><Copy className="h-3 w-3 mr-1" />Copy full doc</>}
               </Button>
@@ -150,8 +224,6 @@ export default function PodcastToolsPage() {
             {briefDoc.clips.map((clip, i) => (
               <Card key={i}>
                 <CardContent className="pt-5 pb-5 flex flex-col gap-4">
-
-                  {/* Header */}
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">CLIP {i + 1}</p>
@@ -163,19 +235,16 @@ export default function PodcastToolsPage() {
                     </div>
                   </div>
 
-                  {/* Hook */}
                   <div className="bg-muted rounded-md px-4 py-3">
                     <p className="text-xs font-semibold text-muted-foreground mb-1">HOOK (0–3s)</p>
                     <p className="text-sm italic">"{clip.hook}"</p>
                   </div>
 
-                  {/* Core clip */}
                   <div>
                     <p className="text-xs font-semibold text-muted-foreground mb-2">CORE CLIP</p>
                     <pre className="whitespace-pre-wrap text-sm leading-relaxed font-sans border rounded-md px-4 py-3 bg-background">{clip.coreClip}</pre>
                   </div>
 
-                  {/* Editing notes */}
                   <div>
                     <p className="text-xs font-semibold text-muted-foreground mb-2">CATATAN EDITING</p>
                     <ul className="flex flex-col gap-1.5">
@@ -188,7 +257,6 @@ export default function PodcastToolsPage() {
                     </ul>
                   </div>
 
-                  {/* CTA + Cliffhanger */}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="border rounded-md px-4 py-3">
                       <p className="text-xs font-semibold text-muted-foreground mb-1">CTA (3 DETIK TERAKHIR)</p>
@@ -200,7 +268,6 @@ export default function PodcastToolsPage() {
                     </div>
                   </div>
 
-                  {/* Copy button */}
                   <Button
                     variant="ghost"
                     size="sm"
