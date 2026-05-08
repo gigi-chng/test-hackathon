@@ -176,7 +176,7 @@ For each clip produce:
 
 2. HOOK — Exact quote from transcript (0–3s). Must work as a standalone sentence with no context. This is what appears on screen as the first thing viewers read/hear.
 
-3. CORE CLIP — Verbatim transcript excerpt, 30–59 seconds. Include speaker names. This is what the editor cuts to.
+3. CORE CLIP — Cleaned transcript excerpt, 30–59 seconds. Include speaker names. Remove all filler words (um, uh, like, you know, I mean, sort of, kind of, right?), false starts, crosstalk, and repetitive phrasing. Keep the meaning and speaker voice intact but make it tight and punchy. Mark cleaned sections with [edited for clarity]. This is what the editor cuts to.
 
 4. EDITING NOTES — 5–6 production instructions written in Indonesian. Cover: on-screen text, words to highlight, pacing, close-up moments, where to cut, and how to end the clip. Always note which trending news story this connects to if relevant.
 
@@ -204,7 +204,7 @@ Return ONLY valid JSON:
     {
       "title": "CLIP TITLE IN ALL CAPS",
       "hook": "Exact opening line from transcript",
-      "coreClip": "Full verbatim transcript excerpt...",
+      "coreClip": "Cleaned transcript excerpt, filler removed...",
       "editingNotes": ["catatan 1", "catatan 2", "catatan 3", "catatan 4", "catatan 5"],
       "ctaLine": "Single line driving to full episode",
       "cliffhanger": "Cut at [exact moment] — leaves viewer wondering [what question]",

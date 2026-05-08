@@ -125,6 +125,8 @@ model PostDraft {
   status          String    @default("pending") // pending | approved | rejected | published
   approvalToken   String    @unique @default(cuid())
   feedback        String?
+  source          String    @default("agent") // "agent" | "announcement"
+  scheduledAt     DateTime?
   publishedAt     DateTime?
   createdAt       DateTime  @default(now())
 

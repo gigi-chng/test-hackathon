@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { ingestPartnerBlog, ingestAllPartners } from "@/lib/actions/ingest"
 import { type Partner } from "@/lib/partners"
 import { getPendingDrafts, getAllDrafts, getContentCount, triggerPipeline } from "@/lib/actions/agent"
-import { RefreshCw, Users, CheckCircle, AlertCircle, Zap, Clock, Send } from "lucide-react"
+import { RefreshCw, Users, CheckCircle, AlertCircle, Zap, Clock, Send, Megaphone } from "lucide-react"
+import Link from "next/link"
 
 const PARTNERS: { key: Partner; name: string; sources: string[] }[] = [
   { key: "sam", name: "Sam Lessin", sources: ["wlessin.com", "@lessin"] },
@@ -108,7 +109,15 @@ export default function AgentPage() {
   return (
     <div className="min-h-screen p-6 flex flex-col items-center gap-6">
       <div className="w-full max-w-3xl">
-        <h1 className="text-3xl font-bold mb-1">Slow Ventures Agent</h1>
+        <div className="flex items-center justify-between mb-1">
+          <h1 className="text-3xl font-bold">Slow Ventures Agent</h1>
+          <Link href="/investment-announcements">
+            <Button variant="outline" size="sm">
+              <Megaphone className="mr-2 h-4 w-4" />
+              New Announcement
+            </Button>
+          </Link>
+        </div>
         <p className="text-muted-foreground mb-8">
           Manage the knowledge base and monitor post drafts.
         </p>

@@ -214,14 +214,17 @@ TWITTER (under 260 characters total including handle):
 - Name the thing directly. Reference the specific news, company, or trend by name — don't be vague
 - Lead with the sharpest possible take, not a warm-up sentence
 - Surfaces an insight sophisticated investors have been saying privately but mainstream hasn't caught onto yet
+- BOOKMARK RULE: Include one thing that makes someone want to save it — a specific number, a counterintuitive framing, or a named company prediction they'll want to reference later. Posts without a save-worthy element underperform.
+- FOLLOW CONVERSION: Write with a strong enough POV that someone reading it thinks "I want more from this account." This means the take should be non-obvious and specific — not a summary of the news, but a view on what it means that most people haven't said yet.
 - Declarative and confident — no questions, no hedging
 - Hard rules: no em dashes, no hashtags, no emojis, no "worth noting/exciting/important/signals that", no corporate language
 
 LINKEDIN (aim for 600-900 characters):
-- Line 1: One sharp hook sentence — same energy as the Twitter post, makes someone stop scrolling
-- Lines 2-4: Expand the partner's actual thinking. This is the educational part — explain the underlying thesis, what the partner has observed, why this trend matters from an investor/operator perspective. Reference the specific insight from their writing or tweets. Make the reader feel like they're getting access to how a smart investor actually thinks about this, not just a reaction.
-- Final line: A confident declarative statement or sharp prediction — no questions
-- Write in the partner's voice but with more room to breathe — LinkedIn readers expect more depth
+- ANCHOR RULE: Every LinkedIn post must be anchored to a SPECIFIC named company, named person, real data point, or dollar figure from the trend or the partner's citation. Never post a generic take without a real anchor. If the trend mentions a specific company — name it. If the citation has a dollar figure or stat — use it. This is the single most important rule.
+- Line 1: One sharp hook sentence — same energy as the Twitter post, makes someone stop scrolling. Name the specific company/person/number if possible.
+- Lines 2-4: Expand the partner's actual thinking. Explain the underlying thesis, what the partner has observed, why this matters from an investor/operator perspective. Use the specific insight from their writing — don't generalize it. The reader should feel like they're getting access to how a smart investor actually thinks, not a summary of a trend. The named company or data point from Line 1 should be the proof case for the thesis.
+- Final line: A confident declarative statement or sharp prediction. No questions.
+- Write in the partner's voice with more room to breathe — LinkedIn readers expect more depth.
 - Hard rules: no em dashes, no hashtags, no questions at the end, no bullet points
 
 Hard rules for BOTH:
@@ -377,7 +380,7 @@ async function sendTelegramApproval(draft: {
     draft.quoteTweetUrl ? `🔁 Will be posted as a quote-tweet: ${draft.quoteTweetUrl}` : `📝 No quote-tweet found — will post standalone`,
     draft.videoId ? `📎 Relevant video from library will be attached` : "",
     ``,
-    `Reply *approve* to post both, *reject* to discard, or *feedback: [note]* to improve it.`,
+    `Reply *approve* (both), *approve twitter*, *approve linkedin*, *reject*, or *feedback: [note]*`,
   ].filter(line => line !== undefined && line !== null).join("\n")
 
   await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {

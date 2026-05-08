@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db/prisma"
+import { publishDraft } from "@/lib/actions/publish"
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
@@ -13,6 +14,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true })
   }
 
+  const sendMsg = async (msg: string) => {
+    const botToken = process.env.TELEGRAM_BOT_TOKEN
+    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text: msg }),
+    })
+  }
+
   // Find the most recent pending draft
   const draft = await prisma.postDraft.findFirst({
     where: { status: "pending" },
@@ -20,176 +30,57 @@ export async function POST(req: NextRequest) {
   })
 
   if (!draft) {
-    await sendTelegramMessage(chatId, "No pending drafts right now.")
+    await sendMsg("No pending drafts right now.")
     return NextResponse.json({ ok: true })
   }
 
-  if (text === "approve") {
-    const results = await publishDraft(draft)
-    await prisma.postDraft.update({
-      where: { id: draft.id },
-      data: { status: "published", publishedAt: new Date() },
+  const showNextDraft = async () => {
+    const next = await prisma.postDraft.findFirst({
+      where: { status: "pending", id: { not: draft.id } },
+      orderBy: { createdAt: "asc" },
     })
-    await sendTelegramMessage(
-      chatId,
-      `Posted.\n${results.twitter ? "✓ Twitter" : "✗ Twitter failed"}\n${results.linkedin ? "✓ LinkedIn" : `✗ LinkedIn failed: ${results.linkedinError || "unknown"}`}`
-    )
+    if (next) {
+      await sendMsg(`Next draft:\n\n─────────────────────\nTWITTER:\n\n${next.hook}\n\n─────────────────────\nLINKEDIN:\n\n${next.body}\n─────────────────────\n\nReply approve, approve twitter, approve linkedin, or reject.`)
+    } else {
+      await sendMsg("No more pending drafts.")
+    }
+  }
+
+  if (text === "approve" || text === "approve twitter" || text === "approve linkedin") {
+    const onlyTwitter = text === "approve twitter"
+    const onlyLinkedin = text === "approve linkedin"
+    const results = await publishDraft(draft, { onlyTwitter, onlyLinkedin })
+    const twitterLine = onlyLinkedin ? "– Twitter skipped" : (results.twitter ? "✓ Twitter" : "✗ Twitter failed")
+    const linkedinLine = onlyTwitter ? "– LinkedIn skipped" : (results.linkedin ? "✓ LinkedIn" : `✗ LinkedIn failed: ${results.linkedinError || "unknown"}`)
+    await sendMsg(`Posted.\n${twitterLine}\n${linkedinLine}`)
+    await showNextDraft()
   } else if (text === "reject") {
     await prisma.postDraft.update({
       where: { id: draft.id },
       data: { status: "rejected" },
     })
-    await sendTelegramMessage(chatId, "Draft rejected.")
+    await sendMsg("Draft rejected.")
+    await showNextDraft()
   } else if (text.startsWith("feedback:")) {
     const note = text.replace("feedback:", "").trim()
     await prisma.postDraft.update({
       where: { id: draft.id },
       data: { feedback: note },
     })
-    await sendTelegramMessage(chatId, `Got it. Saved: "${note}"\nThis will shape all future drafts.\n\nStill want to approve or reject this one?`)
+    await sendMsg(`Got it. Saved: "${note}"\nThis will shape all future drafts.\n\nStill want to approve or reject this one?`)
   } else if (text === "next") {
-    // Show the next pending draft if multiple exist
     const next = await prisma.postDraft.findFirst({
       where: { status: "pending", id: { not: draft.id } },
       orderBy: { createdAt: "desc" },
     })
     if (!next) {
-      await sendTelegramMessage(chatId, "No other pending drafts.")
+      await sendMsg("No other pending drafts.")
     } else {
-      await sendTelegramMessage(chatId, `Next draft:\n\n${next.hook}\n\n${next.body}\n\nReply approve or reject.`)
+      await sendMsg(`Next draft:\n\n${next.hook}\n\n${next.body}\n\nReply approve or reject.`)
     }
   } else {
-    await sendTelegramMessage(chatId, `Reply with:\n• approve — post the draft\n• reject — discard it\n• next — see next draft\n• feedback: [note] — teach the agent for next time`)
+    await sendMsg(`Reply with:\n• approve — post to both Twitter & LinkedIn\n• approve twitter — post to Twitter only\n• approve linkedin — post to LinkedIn only\n• reject — discard it\n• next — see next draft\n• feedback: [note] — teach the agent for next time`)
   }
 
   return NextResponse.json({ ok: true })
-}
-
-async function sendTelegramMessage(chatId: string, text: string) {
-  const botToken = process.env.TELEGRAM_BOT_TOKEN
-  await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text }),
-  })
-}
-
-async function publishDraft(draft: { hook: string; body: string; videoId: string | null; quoteTweetId?: string | null; partnerSourceUrl?: string | null }) {
-  const twitterText = draft.hook  // hook = twitter post
-  const linkedinText = draft.body // body = linkedin post
-  const results: { twitter: boolean; linkedin: boolean; linkedinError?: string } = { twitter: false, linkedin: false }
-
-  const twitterKey = process.env.TWITTER_API_KEY
-  const twitterSecret = process.env.TWITTER_API_SECRET
-  const twitterToken = process.env.TWITTER_ACCESS_TOKEN
-  const twitterTokenSecret = process.env.TWITTER_ACCESS_TOKEN_SECRET
-
-  if (twitterKey && twitterSecret && twitterToken && twitterTokenSecret) {
-    try {
-      // Post main tweet
-      const tweetPayload: Record<string, unknown> = { text: twitterText.slice(0, 280) }
-      if (draft.quoteTweetId) tweetPayload.quote_tweet_id = draft.quoteTweetId
-      const body = JSON.stringify(tweetPayload)
-      const authHeader = await buildTwitterOAuthHeader(
-        "POST", "https://api.twitter.com/2/tweets", body,
-        { twitterKey, twitterSecret, twitterToken, twitterTokenSecret }
-      )
-      const res = await fetch("https://api.twitter.com/2/tweets", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: authHeader },
-        body,
-      })
-      results.twitter = res.ok
-      if (!res.ok) {
-        console.error("Twitter error:", await res.text())
-      } else if (draft.partnerSourceUrl) {
-        // Reply with the partner's original source as first reply in thread
-        const tweetData = await res.json()
-        const mainTweetId = tweetData?.data?.id
-        if (mainTweetId) {
-          const replyText = `Full thinking here: ${draft.partnerSourceUrl}`
-          const replyPayload = JSON.stringify({
-            text: replyText,
-            reply: { in_reply_to_tweet_id: mainTweetId },
-          })
-          const replyAuth = await buildTwitterOAuthHeader(
-            "POST", "https://api.twitter.com/2/tweets", replyPayload,
-            { twitterKey, twitterSecret, twitterToken, twitterTokenSecret }
-          )
-          await fetch("https://api.twitter.com/2/tweets", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: replyAuth },
-            body: replyPayload,
-          })
-        }
-      }
-    } catch (e) {
-      console.error("Twitter publish error:", e)
-    }
-  }
-
-  const linkedinToken = process.env.LINKEDIN_ACCESS_TOKEN
-  const linkedinOrgId = process.env.LINKEDIN_ORG_ID
-  if (linkedinToken && linkedinOrgId) {
-    try {
-      const res = await fetch("https://api.linkedin.com/v2/ugcPosts", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${linkedinToken}`,
-          "X-Restli-Protocol-Version": "2.0.0",
-        },
-        body: JSON.stringify({
-          author: `urn:li:organization:${linkedinOrgId}`,
-          lifecycleState: "PUBLISHED",
-          specificContent: {
-            "com.linkedin.ugc.ShareContent": {
-              shareCommentary: { text: linkedinText },
-              shareMediaCategory: "NONE",
-            },
-          },
-          visibility: { "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC" },
-        }),
-      })
-      results.linkedin = res.ok
-      if (!res.ok) {
-        const errText = await res.text()
-        console.error("LinkedIn error:", res.status, errText)
-        results.linkedinError = `${res.status}: ${errText}`
-      }
-    } catch (e) {
-      console.error("LinkedIn publish error:", e)
-      results.linkedinError = String(e)
-    }
-  } else {
-    results.linkedinError = `missing: token=${!!linkedinToken} orgId=${!!linkedinOrgId}`
-  }
-
-  return results
-}
-
-async function buildTwitterOAuthHeader(
-  method: string, url: string, body: string,
-  keys: { twitterKey: string; twitterSecret: string; twitterToken: string; twitterTokenSecret: string }
-): Promise<string> {
-  const nonce = crypto.randomUUID().replace(/-/g, "")
-  const timestamp = Math.floor(Date.now() / 1000).toString()
-  const params: Record<string, string> = {
-    oauth_consumer_key: keys.twitterKey,
-    oauth_nonce: nonce,
-    oauth_signature_method: "HMAC-SHA256",
-    oauth_timestamp: timestamp,
-    oauth_token: keys.twitterToken,
-    oauth_version: "1.0",
-  }
-  const paramString = Object.keys(params).sort()
-    .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`).join("&")
-  const baseString = [method.toUpperCase(), encodeURIComponent(url), encodeURIComponent(paramString)].join("&")
-  const signingKey = `${encodeURIComponent(keys.twitterSecret)}&${encodeURIComponent(keys.twitterTokenSecret)}`
-  const enc = new TextEncoder()
-  const key = await crypto.subtle.importKey("raw", enc.encode(signingKey), { name: "HMAC", hash: "SHA-256" }, false, ["sign"])
-  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(baseString))
-  const signature = btoa(String.fromCharCode(...new Uint8Array(sig)))
-  params["oauth_signature"] = signature
-  return "OAuth " + Object.keys(params).map(k => `${encodeURIComponent(k)}="${encodeURIComponent(params[k])}"`).join(", ")
 }
