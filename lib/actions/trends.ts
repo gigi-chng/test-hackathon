@@ -100,20 +100,21 @@ async function scoreTrend(trendEmbedding: number[]): Promise<{
 // ─── Check for duplicate drafts ───────────────────────────────────────────────
 
 async function isDuplicate(trendEmbedding: number[]): Promise<boolean> {
-  const recentPosts = await prisma.postDraft.findMany({
+  // Check against recently drafted trend signals (same article run through pipeline before)
+  const recentSignals = await prisma.trendSignal.findMany({
     where: {
-      status: { in: ["published", "pending"] },
-      createdAt: { gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) },
+      status: "drafted",
+      detectedAt: { gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) },
     },
-    select: { hook: true, body: true },
+    select: { headline: true, summary: true },
   })
 
-  for (const post of recentPosts) {
-    const postText = `${post.hook} ${post.body}`
-    const postEmbedding = await embed(postText)
-    const sim = cosineSimilarity(trendEmbedding, postEmbedding)
-    if (sim > 0.75) return true
+  for (const signal of recentSignals) {
+    const signalEmbedding = await embed(`${signal.headline} ${signal.summary}`)
+    const sim = cosineSimilarity(trendEmbedding, signalEmbedding)
+    if (sim > 0.85) return true
   }
+
   return false
 }
 
@@ -408,6 +409,10 @@ export async function runAgentPipeline(): Promise<{ drafted: number; skipped: nu
       console.error("Ingestion failed (non-blocking):", e)
     }
   }
+
+  // Don't queue another draft if one is already waiting for approval
+  const pendingCount = await prisma.postDraft.count({ where: { status: "pending" } })
+  if (pendingCount > 0) return { drafted: 0, skipped: 0, reason: "Draft already pending approval" }
 
   const news = await fetchTrendingNews()
   let skipped = 0
