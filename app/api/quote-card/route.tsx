@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
     const draft = await prisma.postDraft.findUnique({ where: { id: draftId } })
     if (draft) {
       partnerKey = draft.partner
-      quote = draft.hook // use the short twitter hook as the quote
+      quote = draft.partnerCitation
     }
   }
 
