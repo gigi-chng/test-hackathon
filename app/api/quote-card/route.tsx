@@ -1,23 +1,23 @@
 import { ImageResponse } from "next/og"
 import { NextRequest } from "next/server"
+import fs from "fs/promises"
+import path from "path"
 
 const BLACK = "#1E1E1E"
-const MOSS = "#6B7253"
 
 const PARTNER_DISPLAY: Record<string, { name: string; handle: string; title: string; org: string; photo: string }> = {
-  sam: { name: "Sam Lessin", handle: "@lessin", title: "Co-Founder & General Partner", org: "Slow Ventures", photo: "/partners/sam.png" },
-  will: { name: "Will Quist", handle: "@wquist", title: "General Partner", org: "Slow Ventures", photo: "/partners/will.jpg" },
-  yoni: { name: "Yoni Rechtman", handle: "@yrechtman", title: "Partner", org: "Slow Ventures", photo: "/partners/yoni.jpg" },
-  megan: { name: "Megan Lightcap", handle: "@mmlightcap", title: "Founder & Partner", org: "Slow Creator", photo: "/partners/megan.jpg" },
+  sam: { name: "Sam Lessin", handle: "@lessin", title: "Co-Founder & General Partner", org: "Slow Ventures", photo: "sam.png" },
+  will: { name: "Will Quist", handle: "@wquist", title: "General Partner", org: "Slow Ventures", photo: "will.jpg" },
+  yoni: { name: "Yoni Rechtman", handle: "@yrechtman", title: "Partner", org: "Slow Ventures", photo: "yoni.jpg" },
+  megan: { name: "Megan Lightcap", handle: "@mmlightcap", title: "Founder & Partner", org: "Slow Creator", photo: "megan.jpg" },
 }
 
-async function fetchAsBase64(url: URL): Promise<string | null> {
+async function readAsBase64(filePath: string): Promise<string | null> {
   try {
-    const res = await fetch(url)
-    if (!res.ok) return null
-    const buf = await res.arrayBuffer()
-    const mime = res.headers.get("content-type") || "image/jpeg"
-    return `data:${mime};base64,${Buffer.from(buf).toString("base64")}`
+    const buf = await fs.readFile(filePath)
+    const ext = path.extname(filePath).toLowerCase()
+    const mime = ext === ".png" ? "image/png" : "image/jpeg"
+    return `data:${mime};base64,${buf.toString("base64")}`
   } catch {
     return null
   }
@@ -31,11 +31,13 @@ export async function GET(req: NextRequest) {
   const partner = PARTNER_DISPLAY[partnerKey] || PARTNER_DISPLAY.sam
   const displayQuote = quote.length > 260 ? quote.slice(0, 257) + "..." : quote
 
+  const publicDir = path.join(process.cwd(), "public")
+
   const [bgSrc, photoSrc, fontRegular, fontMedium] = await Promise.all([
-    fetchAsBase64(new URL("/partners/background.jpg", req.url)),
-    fetchAsBase64(new URL(partner.photo, req.url)),
-    fetch(new URL("/fonts/AkzidenzGroteskPro-Regular.otf", req.url)).then(r => r.arrayBuffer()),
-    fetch(new URL("/fonts/AkzidenzGroteskPro-Md.otf", req.url)).then(r => r.arrayBuffer()),
+    readAsBase64(path.join(publicDir, "partners", "background.jpg")),
+    readAsBase64(path.join(publicDir, "partners", partner.photo)),
+    fs.readFile(path.join(publicDir, "fonts", "AkzidenzGroteskPro-Regular.otf")),
+    fs.readFile(path.join(publicDir, "fonts", "AkzidenzGroteskPro-Md.otf")),
   ])
 
   return new ImageResponse(
@@ -49,7 +51,7 @@ export async function GET(req: NextRequest) {
           fontFamily: "Helvetica Neue, Helvetica, Arial, sans-serif",
         }}
       >
-        {/* Background image — fills entire card */}
+        {/* Background image */}
         {bgSrc ? (
           <img
             src={bgSrc}
@@ -104,7 +106,7 @@ export async function GET(req: NextRequest) {
           {/* Divider */}
           <div style={{ width: 1040, height: 1, backgroundColor: BLACK, opacity: 0.15, display: "flex" }} />
 
-          {/* Partner info — directly below divider */}
+          {/* Partner info */}
           <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 16 }}>
             {photoSrc && (
               <img
