@@ -96,21 +96,15 @@ export async function GET(req: NextRequest) {
           }}
         >
           {/* Quote mark */}
-          <div style={{ fontSize: 80, color: WHITE, lineHeight: 1, fontWeight: 500, opacity: 0.15, display: "flex", marginBottom: 16 }}>
+          <div style={{ fontSize: 96, color: WHITE, lineHeight: 1, fontWeight: 500, opacity: 0.2, display: "flex", marginBottom: 12 }}>
             "
           </div>
 
           {/* Quote text — fills remaining vertical space */}
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              alignItems: "center",
-            }}
-          >
+          <div style={{ flex: 1, display: "flex", alignItems: "center" }}>
             <div
               style={{
-                fontSize: displayQuote.length > 240 ? 34 : displayQuote.length > 160 ? 42 : displayQuote.length > 80 ? 52 : 64,
+                fontSize: displayQuote.length > 240 ? 42 : displayQuote.length > 160 ? 52 : displayQuote.length > 80 ? 64 : 80,
                 color: WHITE,
                 lineHeight: 1.08,
                 fontWeight: 500,
@@ -124,26 +118,26 @@ export async function GET(req: NextRequest) {
           </div>
 
           {/* Divider */}
-          <div style={{ width: 920, height: 1, backgroundColor: WHITE, opacity: 0.3, display: "flex", marginBottom: 20 }} />
+          <div style={{ width: 920, height: 1, backgroundColor: WHITE, opacity: 0.3, display: "flex", marginBottom: 24 }} />
 
           {/* Partner info */}
-          <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 16 }}>
+          <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 20 }}>
             {photoSrc && (
               <img
                 src={photoSrc}
-                width={52}
-                height={52}
+                width={72}
+                height={72}
                 style={{ borderRadius: 999, objectFit: "cover", display: "flex" }}
               />
             )}
-            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <span style={{ color: WHITE, fontSize: 18, fontWeight: 500, letterSpacing: "0", lineHeight: 1.2, display: "flex" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ color: WHITE, fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.2, display: "flex" }}>
                 {partner.name}
               </span>
-              <span style={{ color: WHITE, fontSize: 12, fontWeight: 400, lineHeight: 1.3, opacity: 0.65, display: "flex" }}>
+              <span style={{ color: WHITE, fontSize: 16, fontWeight: 400, lineHeight: 1.3, opacity: 0.75, display: "flex" }}>
                 {partner.title} · {partner.org}
               </span>
-              <span style={{ color: WHITE, fontSize: 11, fontWeight: 400, lineHeight: 1.3, opacity: 0.45, display: "flex" }}>
+              <span style={{ color: WHITE, fontSize: 14, fontWeight: 400, lineHeight: 1.3, opacity: 0.5, display: "flex" }}>
                 {partner.handle}
               </span>
             </div>
