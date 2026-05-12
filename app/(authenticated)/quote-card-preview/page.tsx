@@ -37,11 +37,11 @@ export default function QuoteCardPreviewPage() {
                 <span className="text-sm font-medium capitalize">{s.partner}</span>
                 <span className="text-xs text-muted-foreground">· via {s.platform}</span>
               </div>
-              <div className="rounded-xl overflow-hidden border border-border shadow-sm">
+              <div className="rounded-xl overflow-hidden border border-border shadow-sm w-full max-w-sm mx-auto aspect-square">
                 <img
                   src={`/api/quote-card?partner=${s.partner}&quote=${encodeURIComponent(s.quote)}&platform=${s.platform}`}
                   alt={`Quote card for ${s.partner}`}
-                  className="w-full"
+                  className="w-full h-full object-cover"
                 />
               </div>
             </div>

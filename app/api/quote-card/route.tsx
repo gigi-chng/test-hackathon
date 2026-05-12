@@ -87,12 +87,12 @@ export async function GET(req: NextRequest) {
             position: "absolute",
             top: 0,
             left: 0,
-            width: 1200,
-            height: 628,
+            width: 1080,
+            height: 1080,
             display: "flex",
             flexDirection: "column",
-            padding: "52px 80px 52px 80px",
-            gap: 20,
+            padding: "80px 80px 80px 80px",
+            gap: 24,
           }}
         >
           {/* Quote mark */}
@@ -103,12 +103,12 @@ export async function GET(req: NextRequest) {
           {/* Quote text — Akzidenz Grotesk Medium */}
           <div
             style={{
-              fontSize: displayQuote.length > 200 ? 26 : displayQuote.length > 120 ? 30 : 38,
+              fontSize: displayQuote.length > 200 ? 28 : displayQuote.length > 120 ? 34 : 42,
               color: BLACK,
               lineHeight: 1.05,
               fontWeight: 500,
               letterSpacing: "-0.05em",
-              width: 1040,
+              width: 920,
               fontFamily: "AkzidenzGrotesk",
             }}
           >
@@ -116,7 +116,7 @@ export async function GET(req: NextRequest) {
           </div>
 
           {/* Divider */}
-          <div style={{ width: 1040, height: 1, backgroundColor: BLACK, opacity: 0.15, display: "flex" }} />
+          <div style={{ width: 920, height: 1, backgroundColor: BLACK, opacity: 0.15, display: "flex" }} />
 
           {/* Partner info */}
           <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 16 }}>
@@ -144,8 +144,8 @@ export async function GET(req: NextRequest) {
       </div>
     ),
     {
-      width: 1200,
-      height: 628,
+      width: 1080,
+      height: 1080,
       fonts: [
         { name: "AkzidenzGrotesk", data: fontRegular, weight: 400, style: "normal" },
         { name: "AkzidenzGrotesk", data: fontMedium, weight: 500, style: "normal" },
