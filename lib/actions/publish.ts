@@ -76,9 +76,7 @@ export async function publishDraft(
     if (zapierUrl) {
       try {
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://slow-hackathon-xi.vercel.app"
-        const quoteCardUrl = draft.partner
-          ? `${baseUrl}/api/quote-card?partner=${draft.partner}&quote=${encodeURIComponent(linkedinText.slice(0, 260))}`
-          : null
+        const quoteCardUrl = draft.partner ? `${baseUrl}/api/quote-card?id=${draft.id}` : null
 
         const res = await fetch(zapierUrl, {
           method: "POST",

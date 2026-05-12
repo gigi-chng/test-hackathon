@@ -2,6 +2,7 @@ import { ImageResponse } from "next/og"
 import { NextRequest } from "next/server"
 import fs from "fs/promises"
 import path from "path"
+import { prisma } from "@/lib/db/prisma"
 
 const BLACK = "#1E1E1E"
 
@@ -25,8 +26,19 @@ async function readAsBase64(filePath: string): Promise<string | null> {
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
-  const partnerKey = searchParams.get("partner") || "sam"
-  const quote = searchParams.get("quote") || "The market is pricing in what hasn't happened yet."
+
+  // Support ?id=DRAFT_ID for short clean URLs (used by Zapier/LinkedIn)
+  let partnerKey = searchParams.get("partner") || "sam"
+  let quote = searchParams.get("quote") || "The market is pricing in what hasn't happened yet."
+
+  const draftId = searchParams.get("id")
+  if (draftId) {
+    const draft = await prisma.postDraft.findUnique({ where: { id: draftId } })
+    if (draft) {
+      partnerKey = draft.partner
+      quote = draft.hook // use the short twitter hook as the quote
+    }
+  }
 
   const partner = PARTNER_DISPLAY[partnerKey] || PARTNER_DISPLAY.sam
   const displayQuote = quote.length > 260 ? quote.slice(0, 257) + "..." : quote
