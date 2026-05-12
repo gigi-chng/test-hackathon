@@ -122,7 +122,7 @@ async function buildTwitterOAuthHeader(
   const params: Record<string, string> = {
     oauth_consumer_key: keys.twitterKey,
     oauth_nonce: nonce,
-    oauth_signature_method: "HMAC-SHA256",
+    oauth_signature_method: "HMAC-SHA1",
     oauth_timestamp: timestamp,
     oauth_token: keys.twitterToken,
     oauth_version: "1.0",
@@ -132,7 +132,7 @@ async function buildTwitterOAuthHeader(
   const baseString = [method.toUpperCase(), encodeURIComponent(url), encodeURIComponent(paramString)].join("&")
   const signingKey = `${encodeURIComponent(keys.twitterSecret)}&${encodeURIComponent(keys.twitterTokenSecret)}`
   const enc = new TextEncoder()
-  const key = await crypto.subtle.importKey("raw", enc.encode(signingKey), { name: "HMAC", hash: "SHA-256" }, false, ["sign"])
+  const key = await crypto.subtle.importKey("raw", enc.encode(signingKey), { name: "HMAC", hash: "SHA-1" }, false, ["sign"])
   const sig = await crypto.subtle.sign("HMAC", key, enc.encode(baseString))
   const signature = btoa(String.fromCharCode(...new Uint8Array(sig)))
   params["oauth_signature"] = signature
