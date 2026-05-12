@@ -211,12 +211,14 @@ Source: ${sourceUrl}
 
 Write TWO versions — one for Twitter, one for LinkedIn.
 
-TWITTER (under 260 characters total including handle):
+TWITTER (under 220 characters total, not counting the handle appended separately):
 - Name the thing directly. Reference the specific news, company, or trend by name — don't be vague
 - Lead with the sharpest possible take, not a warm-up sentence
 - Surfaces an insight sophisticated investors have been saying privately but mainstream hasn't caught onto yet
-- BOOKMARK RULE: Include one thing that makes someone want to save it — a specific number, a counterintuitive framing, or a named company prediction they'll want to reference later. Posts without a save-worthy element underperform.
-- FOLLOW CONVERSION: Write with a strong enough POV that someone reading it thinks "I want more from this account." This means the take should be non-obvious and specific — not a summary of the news, but a view on what it means that most people haven't said yet.
+- REPOST RULE: This is the most important metric. Write something someone wants to be the first to share in their VC/founder group chat — a claim that makes the sharer look smart or prescient. If it could have been written by anyone, it won't get shared. It must be a specific, non-obvious take that feels like insider access.
+- REPLY RULE: State a strong opinion as fact — not hedged, not balanced. The best replies come from people who disagree. A take that everyone agrees with gets no replies. Lean into the controversial or counterintuitive angle.
+- BOOKMARK RULE: Include one thing that makes someone want to save it — a specific number, a counterintuitive framing, or a named company prediction they'll want to reference later.
+- Shorter is better. A punchy 140-character post outperforms a bloated 260-character one. Cut every word that doesn't add to the take.
 - Declarative and confident — no questions, no hedging
 - Hard rules: no em dashes, no hashtags, no emojis, no "worth noting/exciting/important/signals that", no corporate language
 
