@@ -14,12 +14,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true })
   }
 
+  const botToken = process.env.TELEGRAM_BOT_TOKEN
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://slow-hackathon-xi.vercel.app"
+
   const sendMsg = async (msg: string) => {
-    const botToken = process.env.TELEGRAM_BOT_TOKEN
     await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: chatId, text: msg }),
+    })
+  }
+
+  const sendQuoteCard = async (partner: string, quote: string) => {
+    const url = `${appUrl}/api/quote-card?partner=${partner}&quote=${encodeURIComponent(quote.slice(0, 260))}`
+    await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, photo: url, caption: "Quote card preview" }),
     })
   }
 
@@ -41,6 +52,7 @@ export async function POST(req: NextRequest) {
     })
     if (next) {
       await sendMsg(`Next draft:\n\n─────────────────────\nTWITTER:\n\n${next.hook}\n\n─────────────────────\nLINKEDIN:\n\n${next.body}\n─────────────────────\n\nReply approve, approve twitter, approve linkedin, or reject.`)
+      await sendQuoteCard(next.partner, next.body)
     } else {
       await sendMsg("No more pending drafts.")
     }
@@ -49,7 +61,7 @@ export async function POST(req: NextRequest) {
   if (text === "approve" || text === "approve twitter" || text === "approve linkedin") {
     const onlyTwitter = text === "approve twitter"
     const onlyLinkedin = text === "approve linkedin"
-    const results = await publishDraft(draft, { onlyTwitter, onlyLinkedin })
+    const results = await publishDraft({ ...draft, partner: draft.partner }, { onlyTwitter, onlyLinkedin })
     const twitterLine = onlyLinkedin ? "– Twitter skipped" : (results.twitter ? "✓ Twitter" : "✗ Twitter failed")
     const linkedinLine = onlyTwitter ? "– LinkedIn skipped" : (results.linkedin ? "✓ LinkedIn" : `✗ LinkedIn failed: ${results.linkedinError || "unknown"}`)
     await sendMsg(`Posted.\n${twitterLine}\n${linkedinLine}`)
