@@ -91,32 +91,39 @@ export async function GET(req: NextRequest) {
             height: 1080,
             display: "flex",
             flexDirection: "column",
-            padding: "80px 80px 80px 80px",
-            gap: 24,
+            padding: "80px 80px 72px 80px",
           }}
         >
           {/* Quote mark */}
-          <div style={{ fontSize: 72, color: BLACK, lineHeight: 1, fontWeight: 500, opacity: 0.15, display: "flex" }}>
+          <div style={{ fontSize: 80, color: BLACK, lineHeight: 1, fontWeight: 500, opacity: 0.15, display: "flex", marginBottom: 16 }}>
             "
           </div>
 
-          {/* Quote text — Akzidenz Grotesk Medium */}
+          {/* Quote text — fills remaining vertical space */}
           <div
             style={{
-              fontSize: displayQuote.length > 200 ? 28 : displayQuote.length > 120 ? 34 : 42,
-              color: BLACK,
-              lineHeight: 1.05,
-              fontWeight: 500,
-              letterSpacing: "-0.05em",
-              width: 920,
-              fontFamily: "AkzidenzGrotesk",
+              flex: 1,
+              display: "flex",
+              alignItems: "center",
             }}
           >
-            {displayQuote}
+            <div
+              style={{
+                fontSize: displayQuote.length > 240 ? 34 : displayQuote.length > 160 ? 42 : displayQuote.length > 80 ? 52 : 64,
+                color: BLACK,
+                lineHeight: 1.08,
+                fontWeight: 500,
+                letterSpacing: "-0.05em",
+                width: 920,
+                fontFamily: "AkzidenzGrotesk",
+              }}
+            >
+              {displayQuote}
+            </div>
           </div>
 
           {/* Divider */}
-          <div style={{ width: 920, height: 1, backgroundColor: BLACK, opacity: 0.15, display: "flex" }} />
+          <div style={{ width: 920, height: 1, backgroundColor: BLACK, opacity: 0.15, display: "flex", marginBottom: 20 }} />
 
           {/* Partner info */}
           <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 16 }}>
