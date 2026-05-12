@@ -7,6 +7,7 @@ export async function publishDraft(
     id: string
     hook: string
     body: string
+    partner?: string | null
     videoId: string | null
     quoteTweetId?: string | null
     partnerSourceUrl?: string | null
@@ -74,10 +75,15 @@ export async function publishDraft(
     const zapierUrl = process.env.ZAPIER_LINKEDIN_WEBHOOK
     if (zapierUrl) {
       try {
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://slow-hackathon-xi.vercel.app"
+        const quoteCardUrl = draft.partner
+          ? `${baseUrl}/api/quote-card?partner=${draft.partner}&quote=${encodeURIComponent(linkedinText.slice(0, 260))}`
+          : null
+
         const res = await fetch(zapierUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ body: linkedinText }),
+          body: JSON.stringify({ body: linkedinText, quoteCardUrl }),
         })
         results.linkedin = res.ok
         if (!res.ok) {
