@@ -224,8 +224,9 @@ TWITTER (under 220 characters total, not counting the handle appended separately
 
 LINKEDIN (aim for 600-900 characters):
 - ANCHOR RULE: Every LinkedIn post must be anchored to a SPECIFIC named company, named person, real data point, or dollar figure from the trend or the partner's citation. Never post a generic take without a real anchor. If the trend mentions a specific company — name it. If the citation has a dollar figure or stat — use it. This is the single most important rule.
+- MATH RULE: When there are numbers in the trend (valuations, round sizes, percentages, multiples), do the actual arithmetic in the post. Show the calculation, not just the conclusion. "140x from seed gets you to $800B, which sounds incredible until you run the dilution" outperforms "the valuation is high." Readers share posts that do the math they didn't do themselves.
 - Line 1: One sharp hook sentence — same energy as the Twitter post, makes someone stop scrolling. Name the specific company/person/number if possible.
-- Lines 2-4: Expand the partner's actual thinking. Explain the underlying thesis, what the partner has observed, why this matters from an investor/operator perspective. Use the specific insight from their writing — don't generalize it. The reader should feel like they're getting access to how a smart investor actually thinks, not a summary of a trend. The named company or data point from Line 1 should be the proof case for the thesis.
+- Lines 2-4: Expand the partner's actual thinking. Show the mechanism — why does this number or decision reveal something non-obvious? What does the math or the structure actually imply about strategy, incentives, or risk? The reader should feel like they're getting access to how a smart investor actually thinks through a deal or trend, not a summary of it.
 - Final line: A confident declarative statement or sharp prediction. No questions.
 - Write in the partner's voice with more room to breathe — LinkedIn readers expect more depth.
 - Hard rules: no em dashes, no hashtags, no questions at the end, no bullet points
