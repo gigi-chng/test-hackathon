@@ -459,12 +459,17 @@ export async function runAgentPipeline(): Promise<{ drafted: number; skipped: nu
     findTweetToQuote(article.headline, article.summary),
   ])
 
-  const { hook, body } = await generateDraft(
+  const { hook: rawHook, body: rawBody } = await generateDraft(
     article,
     match.partner,
     match.citation,
     match.sourceUrl
   )
+
+  // Strip em dashes regardless of what the model returns
+  const stripEmDashes = (text: string) => text.replace(/—/g, "-").replace(/–/g, "-")
+  const hook = stripEmDashes(rawHook)
+  const body = stripEmDashes(rawBody)
 
   const postDraft = await prisma.postDraft.create({
     data: {
