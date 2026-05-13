@@ -53,9 +53,9 @@ Produce:
 
 1. TITLE — ALL CAPS, max 8 words. Frame it as a market insight or bold take, not a description of a conversation.
 
-2. HOOK — Exact quote (0–3s), cleaned of filler. The first thing the viewer hears. Must work as a standalone sentence that signals a sharp insight.
+2. HOOK — Exact quote (0–3s), cleaned of filler. The first thing the viewer hears. Must work as a standalone sentence that signals a sharp insight. IMPORTANT: The hook must NOT be repeated or closely paraphrased in the first 10–15 seconds of the core clip. Either choose a hook from later in the clip, or choose a hook sentence that is not immediately followed by a near-identical statement.
 
-3. CORE CLIP — Cleaned transcript excerpt, 30–59 seconds. Include speaker names. Remove filler words, false starts, and crosstalk. Add [edited for clarity] where you've cleaned. This is what the editor cuts to.
+3. CORE CLIP — Cleaned transcript excerpt, 30–59 seconds. Include speaker names. Remove filler words, false starts, and crosstalk. Add [edited for clarity] where you've cleaned. This is what the editor cuts to. IMPORTANT: Do not start the core clip with the same sentence or idea as the hook — the clip should begin where the argument expands or deepens, not where it repeats the hook.
 
 4. EDITING NOTES — 5–6 production instructions in Indonesian. Cover: on-screen text to add context for the VC/founder audience, words to highlight, pacing, and exactly where to cut to leave the argument unresolved.
 
@@ -174,9 +174,9 @@ For each clip produce:
 
 1. TITLE — ALL CAPS, max 8 words. The sharpest possible description of the moment.
 
-2. HOOK — Exact quote from transcript (0–3s). Must work as a standalone sentence with no context. This is what appears on screen as the first thing viewers read/hear.
+2. HOOK — Exact quote from transcript (0–3s). Must work as a standalone sentence with no context. This is what appears on screen as the first thing viewers read/hear. IMPORTANT: The hook must NOT be the same sentence or idea that opens the core clip — pick a hook from later in the clip, or pick a line that the clip does not immediately echo or restate.
 
-3. CORE CLIP — Cleaned transcript excerpt, 30–59 seconds. Include speaker names. Remove all filler words (um, uh, like, you know, I mean, sort of, kind of, right?), false starts, crosstalk, and repetitive phrasing. Keep the meaning and speaker voice intact but make it tight and punchy. Mark cleaned sections with [edited for clarity]. This is what the editor cuts to.
+3. CORE CLIP — Cleaned transcript excerpt, 30–59 seconds. Include speaker names. Remove all filler words (um, uh, like, you know, I mean, sort of, kind of, right?), false starts, crosstalk, and repetitive phrasing. Keep the meaning and speaker voice intact but make it tight and punchy. Mark cleaned sections with [edited for clarity]. This is what the editor cuts to. IMPORTANT: The clip must not open with the same sentence or a near-restatement of the hook — start where the thinking goes deeper, not where it repeats.
 
 4. EDITING NOTES — 5–6 production instructions written in Indonesian. Cover: on-screen text, words to highlight, pacing, close-up moments, where to cut, and how to end the clip. Always note which trending news story this connects to if relevant.
 
