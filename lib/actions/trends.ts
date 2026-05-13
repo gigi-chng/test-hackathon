@@ -85,10 +85,15 @@ async function scoreTrend(trendEmbedding: number[]): Promise<{
     if (!item.embedding || item.embedding.length === 0) continue
     const score = cosineSimilarity(trendEmbedding, item.embedding)
     if (score > best.score) {
+      // Strip email template headers (navigation + soft-hyphen spacers) before slicing
+      const lastSoftHyphen = item.content.lastIndexOf('\u00ad')
+      const cleanedContent = lastSoftHyphen > 0 && lastSoftHyphen < item.content.length - 20
+        ? item.content.slice(lastSoftHyphen + 1).trim()
+        : item.content.trim()
       best = {
         score,
         partner: item.partner,
-        citation: item.content.slice(0, 500),
+        citation: cleanedContent.slice(0, 500),
         sourceUrl: item.sourceUrl || "",
       }
     }
