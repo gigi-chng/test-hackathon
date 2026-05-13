@@ -42,7 +42,8 @@ export async function GET(req: NextRequest) {
   }
 
   const partner = PARTNER_DISPLAY[partnerKey] || PARTNER_DISPLAY.sam
-  const displayQuote = quote.length > 260 ? quote.slice(0, 257) + "..." : quote
+  const cleanQuote = quote.replace(/https?:\/\/\S+/g, "").replace(/\s+/g, " ").trim()
+  const displayQuote = cleanQuote.length > 260 ? cleanQuote.slice(0, 257) + "..." : cleanQuote
 
   const publicDir = path.join(process.cwd(), "public")
 
