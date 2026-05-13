@@ -25,8 +25,8 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  const sendQuoteCard = async (partner: string, quote: string) => {
-    const url = `${appUrl}/api/quote-card?partner=${partner}&quote=${encodeURIComponent(quote.slice(0, 260))}`
+  const sendQuoteCard = async (draftId: string) => {
+    const url = `${appUrl}/api/quote-card?id=${draftId}`
     await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     })
     if (next) {
       await sendMsg(`Next draft:\n\n─────────────────────\nTWITTER:\n\n${next.hook}\n\n─────────────────────\nLINKEDIN:\n\n${next.body}\n─────────────────────\n\nReply approve, approve twitter, approve linkedin, or reject.`)
-      await sendQuoteCard(next.partner, next.body)
+      await sendQuoteCard(next.id)
     } else {
       await sendMsg("No more pending drafts.")
     }

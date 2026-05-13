@@ -344,6 +344,7 @@ async function findMatchingVideo(trendEmbedding: number[]): Promise<string | nul
 // ─── Send Telegram approval message ──────────────────────────────────────────
 
 async function sendTelegramApproval(draft: {
+  id: string
   hook: string
   body: string
   partner: string
@@ -397,9 +398,9 @@ async function sendTelegramApproval(draft: {
     }),
   })
 
-  // Send quote card preview image
+  // Send quote card preview image (use ?id= so it pulls partnerCitation from DB)
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://slow-hackathon-xi.vercel.app"
-  const quoteCardUrl = `${appUrl}/api/quote-card?partner=${draft.partner}&quote=${encodeURIComponent(draft.body.slice(0, 260))}`
+  const quoteCardUrl = `${appUrl}/api/quote-card?id=${draft.id}`
   await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -499,6 +500,7 @@ export async function runAgentPipeline(): Promise<{ drafted: number; skipped: nu
   })
 
   await sendTelegramApproval({
+    id: postDraft.id,
     hook,
     body,
     partner: match.partner,
