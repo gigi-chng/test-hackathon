@@ -413,7 +413,7 @@ async function sendTelegramApproval(draft: {
   // Send quote card preview image (use ?id= so it pulls partnerCitation from DB)
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://slow-hackathon-xi.vercel.app"
   const quoteCardUrl = `${appUrl}/api/quote-card?id=${draft.id}`
-  await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+  const photoRes = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -422,6 +422,10 @@ async function sendTelegramApproval(draft: {
       caption: "Quote card preview (attached to LinkedIn post)",
     }),
   })
+  if (!photoRes.ok) {
+    const err = await photoRes.text()
+    console.error("Telegram sendPhoto failed:", err, "URL:", quoteCardUrl)
+  }
 }
 
 // ─── Main: run the full agent pipeline ───────────────────────────────────────
