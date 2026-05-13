@@ -333,17 +333,20 @@ async function findTweetToQuote(headline: string, keywords: string): Promise<{ i
 
 // ─── Find matching video ──────────────────────────────────────────────────────
 
-async function findMatchingVideo(trendEmbedding: number[]): Promise<string | null> {
+async function findMatchingVideo(trendEmbedding: number[]): Promise<{ id: string; title: string; partner: string; storageUrl: string } | null> {
   const videos = await prisma.videoLibrary.findMany({
-    select: { id: true, embedding: true },
+    select: { id: true, title: true, partner: true, storageUrl: true, embedding: true },
   })
 
+  let best: { id: string; title: string; partner: string; storageUrl: string; score: number } | null = null
   for (const video of videos) {
     if (!video.embedding || video.embedding.length === 0) continue
     const sim = cosineSimilarity(trendEmbedding, video.embedding)
-    if (sim > 0.75) return video.id
+    if (sim > 0.75 && (!best || sim > best.score)) {
+      best = { id: video.id, title: video.title, partner: video.partner, storageUrl: video.storageUrl, score: sim }
+    }
   }
-  return null
+  return best ? { id: best.id, title: best.title, partner: best.partner, storageUrl: best.storageUrl } : null
 }
 
 // ─── Send Telegram approval message ──────────────────────────────────────────
@@ -355,7 +358,7 @@ async function sendTelegramApproval(draft: {
   partner: string
   partnerCitation: string
   approvalToken: string
-  videoId: string | null
+  video: { id: string; title: string; partner: string; storageUrl: string } | null
   quoteTweetUrl: string | null
   trend: { headline: string; source: string }
 }) {
@@ -388,7 +391,11 @@ async function sendTelegramApproval(draft: {
     `*Drawing on:* ${partnerNames[draft.partner]}`,
     `_"${draft.partnerCitation.slice(0, 150)}..."_`,
     draft.quoteTweetUrl ? `🔁 Will be posted as a quote-tweet: ${draft.quoteTweetUrl}` : `📝 No quote-tweet found — will post standalone`,
-    draft.videoId ? `📎 Relevant video from library will be attached` : "",
+    draft.video
+      ? draft.video.partner === "founder"
+        ? `📎 Clip match (portfolio founder): "${draft.video.title}" — ${draft.video.storageUrl}`
+        : `📎 Clip match: "${draft.video.title}" — ${draft.video.storageUrl}`
+      : "",
     ``,
     `Reply *approve* (both), *approve twitter*, *approve linkedin*, *reject*, or *feedback: [note]*`,
   ].filter(line => line !== undefined && line !== null).join("\n")
@@ -460,7 +467,7 @@ export async function runAgentPipeline(): Promise<{ drafted: number; skipped: nu
 
   const { article, embedding: trendEmbedding, match } = best
 
-  const [videoId, quoteTweet] = await Promise.all([
+  const [video, quoteTweet] = await Promise.all([
     findMatchingVideo(trendEmbedding),
     findTweetToQuote(article.headline, article.summary),
   ])
@@ -485,7 +492,7 @@ export async function runAgentPipeline(): Promise<{ drafted: number; skipped: nu
       hook,
       body,
       platform: "both",
-      videoId,
+      videoId: video?.id ?? null,
       quoteTweetId: quoteTweet?.id ?? null,
       quoteTweetUrl: quoteTweet?.url ?? null,
       partnerSourceUrl: match.sourceUrl ?? null,
@@ -511,7 +518,7 @@ export async function runAgentPipeline(): Promise<{ drafted: number; skipped: nu
     partner: match.partner,
     partnerCitation: match.citation,
     approvalToken: postDraft.approvalToken,
-    videoId,
+    video,
     quoteTweetUrl: quoteTweet?.url ?? null,
     trend: { headline: article.headline, source: article.source },
   })

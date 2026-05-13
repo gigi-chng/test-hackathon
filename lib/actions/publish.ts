@@ -2,6 +2,94 @@
 
 import { prisma } from "@/lib/db/prisma"
 
+// Upload a video to Twitter using chunked media upload (v1.1 API)
+async function uploadVideoToTwitter(
+  videoUrl: string,
+  keys: { twitterKey: string; twitterSecret: string; twitterToken: string; twitterTokenSecret: string }
+): Promise<string | null> {
+  try {
+    // Download from Google Drive
+    const driveFileId = videoUrl.match(/\/d\/([^/]+)\//)?.[1]
+    if (!driveFileId) return null
+    const downloadUrl = `https://drive.google.com/uc?export=download&id=${driveFileId}&confirm=t`
+    const videoRes = await fetch(downloadUrl)
+    if (!videoRes.ok) return null
+    const videoBuffer = Buffer.from(await videoRes.arrayBuffer())
+    const totalBytes = videoBuffer.length
+
+    const oauthHeaders = async (method: string, url: string, params: Record<string, string>) => {
+      const nonce = crypto.randomUUID().replace(/-/g, "")
+      const timestamp = Math.floor(Date.now() / 1000).toString()
+      const oauthParams: Record<string, string> = {
+        oauth_consumer_key: keys.twitterKey,
+        oauth_nonce: nonce,
+        oauth_signature_method: "HMAC-SHA1",
+        oauth_timestamp: timestamp,
+        oauth_token: keys.twitterToken,
+        oauth_version: "1.0",
+      }
+      const allParams = { ...oauthParams, ...params }
+      const paramString = Object.keys(allParams).sort()
+        .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(allParams[k])}`).join("&")
+      const baseString = [method, encodeURIComponent(url), encodeURIComponent(paramString)].join("&")
+      const signingKey = `${encodeURIComponent(keys.twitterSecret)}&${encodeURIComponent(keys.twitterTokenSecret)}`
+      const enc = new TextEncoder()
+      const key = await crypto.subtle.importKey("raw", enc.encode(signingKey), { name: "HMAC", hash: "SHA-1" }, false, ["sign"])
+      const sig = await crypto.subtle.sign("HMAC", key, enc.encode(baseString))
+      oauthParams["oauth_signature"] = btoa(String.fromCharCode(...new Uint8Array(sig)))
+      return "OAuth " + Object.keys(oauthParams).map(k => `${encodeURIComponent(k)}="${encodeURIComponent(oauthParams[k])}"`).join(", ")
+    }
+
+    const uploadUrl = "https://upload.twitter.com/1.1/media/upload.json"
+
+    // INIT
+    const initParams = { command: "INIT", total_bytes: String(totalBytes), media_type: "video/mp4", media_category: "tweet_video" }
+    const initAuth = await oauthHeaders("POST", uploadUrl, initParams)
+    const initBody = new URLSearchParams(initParams)
+    const initRes = await fetch(uploadUrl, { method: "POST", headers: { Authorization: initAuth, "Content-Type": "application/x-www-form-urlencoded" }, body: initBody })
+    if (!initRes.ok) { console.error("Twitter media INIT failed:", await initRes.text()); return null }
+    const { media_id_string: mediaId } = await initRes.json()
+
+    // APPEND in 5MB chunks
+    const chunkSize = 5 * 1024 * 1024
+    for (let i = 0; i * chunkSize < totalBytes; i++) {
+      const chunk = videoBuffer.slice(i * chunkSize, (i + 1) * chunkSize)
+      const appendAuth = await oauthHeaders("POST", uploadUrl, { command: "APPEND", media_id: mediaId, segment_index: String(i) })
+      const form = new FormData()
+      form.append("command", "APPEND")
+      form.append("media_id", mediaId)
+      form.append("segment_index", String(i))
+      form.append("media", new Blob([chunk], { type: "video/mp4" }))
+      await fetch(uploadUrl, { method: "POST", headers: { Authorization: appendAuth }, body: form })
+    }
+
+    // FINALIZE
+    const finalParams = { command: "FINALIZE", media_id: mediaId }
+    const finalAuth = await oauthHeaders("POST", uploadUrl, finalParams)
+    const finalRes = await fetch(uploadUrl, { method: "POST", headers: { Authorization: finalAuth, "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(finalParams) })
+    if (!finalRes.ok) { console.error("Twitter media FINALIZE failed:", await finalRes.text()); return null }
+    const finalData = await finalRes.json()
+
+    // Poll for processing completion
+    let state = finalData?.processing_info?.state
+    let waitSecs = finalData?.processing_info?.check_after_secs ?? 5
+    while (state === "pending" || state === "in_progress") {
+      await new Promise(r => setTimeout(r, waitSecs * 1000))
+      const statusAuth = await oauthHeaders("GET", uploadUrl, { command: "STATUS", media_id: mediaId })
+      const statusRes = await fetch(`${uploadUrl}?command=STATUS&media_id=${mediaId}`, { headers: { Authorization: statusAuth } })
+      const statusData = await statusRes.json()
+      state = statusData?.processing_info?.state
+      waitSecs = statusData?.processing_info?.check_after_secs ?? 5
+    }
+    if (state === "failed") { console.error("Twitter media processing failed"); return null }
+
+    return mediaId
+  } catch (e) {
+    console.error("Video upload error:", e)
+    return null
+  }
+}
+
 export async function publishDraft(
   draft: {
     id: string
@@ -30,8 +118,18 @@ export async function publishDraft(
 
     if (twitterKey && twitterSecret && twitterToken && twitterTokenSecret) {
       try {
+        // Upload video if one is attached
+        let mediaId: string | null = null
+        if (draft.videoId) {
+          const video = await prisma.videoLibrary.findUnique({ where: { id: draft.videoId }, select: { storageUrl: true } })
+          if (video?.storageUrl) {
+            mediaId = await uploadVideoToTwitter(video.storageUrl, { twitterKey, twitterSecret, twitterToken, twitterTokenSecret })
+          }
+        }
+
         const tweetPayload: Record<string, unknown> = { text: twitterText.slice(0, 280) }
         if (useQuoteTweet && draft.quoteTweetId) tweetPayload.quote_tweet_id = draft.quoteTweetId
+        if (mediaId) tweetPayload.media = { media_ids: [mediaId] }
         const body = JSON.stringify(tweetPayload)
         const authHeader = await buildTwitterOAuthHeader(
           "POST", "https://api.twitter.com/2/tweets", body,
