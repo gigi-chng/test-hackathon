@@ -342,7 +342,7 @@ async function findMatchingVideo(trendEmbedding: number[]): Promise<{ id: string
   for (const video of videos) {
     if (!video.embedding || video.embedding.length === 0) continue
     const sim = cosineSimilarity(trendEmbedding, video.embedding)
-    if (sim > 0.75 && (!best || sim > best.score)) {
+    if (sim > 0.55 && (!best || sim > best.score)) {
       best = { id: video.id, title: video.title, partner: video.partner, storageUrl: video.storageUrl, score: sim }
     }
   }
