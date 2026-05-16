@@ -448,7 +448,7 @@ export async function runAgentPipeline(): Promise<{ drafted: number; skipped: nu
 
   // Don't queue another draft if one is already waiting for approval
   const pendingCount = await prisma.postDraft.count({ where: { status: "pending" } })
-  if (pendingCount > 0) return { drafted: 0, skipped: 0, reason: "Draft already pending approval" }
+  if (pendingCount >= 5) return { drafted: 0, skipped: 0, reason: "Draft queue full (5 pending)" }
 
   const news = await fetchTrendingNews()
   let skipped = 0
