@@ -220,9 +220,12 @@ TWITTER (under 220 characters total, not counting the handle appended separately
 - Name the thing directly. Reference the specific news, company, or trend by name — don't be vague
 - Lead with the sharpest possible take, not a warm-up sentence
 - Surfaces an insight sophisticated investors have been saying privately but mainstream hasn't caught onto yet
-- REPOST RULE: This is the most important metric. Write something someone wants to be the first to share in their VC/founder group chat — a claim that makes the sharer look smart or prescient. If it could have been written by anyone, it won't get shared. It must be a specific, non-obvious take that feels like insider access.
-- REPLY RULE: State a strong opinion as fact — not hedged, not balanced. The best replies come from people who disagree. A take that everyone agrees with gets no replies. Lean into the controversial or counterintuitive angle.
+- REPOST RULE: Write something someone wants to be the first to share in their VC/founder group chat — a claim that makes the sharer look smart or prescient. Must be specific, non-obvious, feels like insider access.
+- REPLY RULE: State a strong opinion as fact — not hedged, not balanced. The best replies come from people who disagree. Lean into the controversial or counterintuitive angle. A contestable position beats a consensus take every time.
 - BOOKMARK RULE: Include one thing that makes someone want to save it — a specific number, a counterintuitive framing, or a named company prediction they'll want to reference later.
+- DWELL RULE: Write something that takes more than 2 seconds to process. A take with real density — a number, a named company, a mechanism — beats a one-liner platitude. Make them stop and think.
+- PROFILE CLICK RULE: Write things that make people wonder "who is this." First-person stakes, contrarian claim, or identity hook. The reader should want to know more about the person behind the take.
+- AVOID: generic phrasing that sounds like every other VC tweet. Avoid trigger words that land on mute lists. Avoid anything that could have been written by anyone. Topic consistency matters — stay in VC/tech/markets lane.
 - Shorter is better. A punchy 140-character post outperforms a bloated 260-character one. Cut every word that doesn't add to the take.
 - Declarative and confident — no questions, no hedging
 - Hard rules: no em dashes, no hashtags, no emojis, no "worth noting/exciting/important/signals that", no corporate language
