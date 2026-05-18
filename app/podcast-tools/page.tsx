@@ -1,11 +1,11 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { generateClipBriefs, generateIntroClip, verifyEditorPassword, type ClipBriefDoc, type IntroClip } from "@/lib/actions/podcast"
-import { FileText, Copy, Check, Lock, Clapperboard } from "lucide-react"
+import { generateClipBriefs, generateIntroClip, reviewCaptions, verifyEditorPassword, type ClipBriefDoc, type IntroClip } from "@/lib/actions/podcast"
+import { FileText, Copy, Check, Lock, Clapperboard, Upload, Subtitles } from "lucide-react"
 
 export default function PodcastToolsPage() {
   const [unlocked, setUnlocked] = useState(false)
@@ -18,6 +18,12 @@ export default function PodcastToolsPage() {
   const [introClip, setIntroClip] = useState<IntroClip | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
+
+  const [captionFile, setCaptionFile] = useState<{ name: string; content: string } | null>(null)
+  const [captionLoading, setCaptionLoading] = useState(false)
+  const [captionResult, setCaptionResult] = useState<string | null>(null)
+  const [captionError, setCaptionError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (localStorage.getItem("editor_unlocked") === "true") setUnlocked(true)
@@ -68,6 +74,33 @@ export default function PodcastToolsPage() {
     navigator.clipboard.writeText(text)
     setCopied(id)
     setTimeout(() => setCopied(null), 2000)
+  }
+
+  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      setCaptionFile({ name: file.name, content: ev.target?.result as string })
+      setCaptionResult(null)
+      setCaptionError(null)
+    }
+    reader.readAsText(file)
+  }
+
+  async function handleReviewCaptions() {
+    if (!captionFile) return
+    setCaptionLoading(true)
+    setCaptionResult(null)
+    setCaptionError(null)
+    try {
+      const result = await reviewCaptions({ content: captionFile.content, filename: captionFile.name })
+      setCaptionResult(result)
+    } catch (e) {
+      setCaptionError(`Something went wrong: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setCaptionLoading(false)
+    }
   }
 
   function formatFullDoc(doc: ClipBriefDoc): string {
@@ -210,6 +243,67 @@ export default function PodcastToolsPage() {
             </Card>
           </div>
         )}
+
+        {/* Caption proofreader */}
+        <Card className="mb-6">
+          <CardContent className="pt-6 flex flex-col gap-4">
+            <div>
+              <h2 className="font-semibold text-base mb-1">Caption Proofreader</h2>
+              <p className="text-sm text-muted-foreground">Upload a caption export (.srt, .vtt, or .txt) and get a first-pass spell check and transcription error fix.</p>
+            </div>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".srt,.vtt,.txt"
+              className="hidden"
+              onChange={handleFileUpload}
+            />
+
+            <div className="flex items-center gap-3">
+              <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+                <Upload className="h-4 w-4 mr-2" />
+                {captionFile ? captionFile.name : "Upload caption file"}
+              </Button>
+              {captionFile && (
+                <Button onClick={handleReviewCaptions} disabled={captionLoading}>
+                  <Subtitles className={`h-4 w-4 mr-2 ${captionLoading ? "animate-spin" : ""}`} />
+                  {captionLoading ? "Reviewing..." : "Review captions"}
+                </Button>
+              )}
+            </div>
+
+            {captionError && <p className="text-sm text-destructive">{captionError}</p>}
+
+            {captionResult && (
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-muted-foreground">CORRECTED OUTPUT</p>
+                  <Button variant="ghost" size="sm" onClick={() => copyText(captionResult, "caption-result")}>
+                    {copied === "caption-result" ? <><Check className="h-3 w-3 mr-1" />Copied</> : <><Copy className="h-3 w-3 mr-1" />Copy</>}
+                  </Button>
+                </div>
+                <pre className="whitespace-pre-wrap text-sm leading-relaxed font-mono border rounded-md px-4 py-3 bg-muted max-h-[400px] overflow-y-auto">{captionResult}</pre>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="self-start"
+                  onClick={() => {
+                    const blob = new Blob([captionResult], { type: "text/plain" })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement("a")
+                    a.href = url
+                    a.download = captionFile ? `reviewed_${captionFile.name}` : "reviewed_captions.srt"
+                    a.click()
+                    URL.revokeObjectURL(url)
+                  }}
+                >
+                  Download corrected file
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Shorts clips */}
         {briefDoc && (

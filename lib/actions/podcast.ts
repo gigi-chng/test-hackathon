@@ -162,6 +162,10 @@ YOUTUBE SHORTS PERFORMANCE RULES:
 - Re-watch value: a stat, a reversal, or a line people want to send to someone
 - Vertical format: note when to cut to close-up reactions or faces
 - SELF-CONTAINED: the clip must make complete sense to someone who has never heard of this podcast, these speakers, or this topic. No assumed context. If a clip references something discussed earlier in the episode, either exclude it or note in editing notes what on-screen text is needed to give viewers the context they need.
+- NEVER START MID-SENTENCE OR MID-EXCHANGE: the clip must open on a complete, standalone sentence. If the best moment begins mid-conversation, either find an earlier sentence that sets it up cleanly, or disqualify it. A viewer who lands cold must instantly understand who is speaking and what they are talking about.
+- NEVER REPEAT THE SAME LINE WITHIN THE CORE CLIP: if any phrase or idea appears twice in the transcript excerpt, cut one. Word-for-word repetition kills momentum in the first 10 seconds and causes drop-off.
+- NEVER END ON A REACTION OR LAUGH LINE: do not end the clip on "that's funny", "that makes sense", "totally", "yeah", or any line where someone is reacting to the point rather than making one. The final line must be a statement, a claim, or a punchline — not an acknowledgment.
+- NEVER INCLUDE INSIDER REFERENCES IN THE CLOSING: if the clip ends with a personal anecdote, an inside joke about one of the speakers, or a reference to their personal investments or relationships, cut before it. Viewers who don't know the speakers will be confused exactly when the clip should be landing.
 
 Speakers: ${speakers}
 ${headlinesSection}
@@ -234,6 +238,51 @@ Return ONLY valid JSON:
     speakers: speakerList,
     clips: parsed.clips,
   }
+}
+
+export async function reviewCaptions(input: { content: string; filename: string }): Promise<string> {
+  const { content, filename } = input
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "txt"
+
+  const formatNote =
+    ext === "srt"
+      ? "This is an SRT subtitle file. Preserve ALL sequence numbers, timestamps (e.g. 00:01:23,456 --> 00:01:25,789), and blank lines between entries exactly as they are. Only fix the caption text lines."
+      : ext === "vtt"
+      ? "This is a WebVTT file. Preserve the WEBVTT header, all timestamp cue lines (e.g. 00:01.000 --> 00:02.000), NOTE blocks, and blank lines exactly as they are. Only fix the caption text lines."
+      : "This is a plain text caption file. Preserve all line breaks and structure exactly as they are. Only fix the text content."
+
+  const prompt = `You are a caption proofreader. Your job is to fix errors in this caption file without changing the meaning, rephrasing sentences, or altering anyone's voice.
+
+${formatNote}
+
+WHAT TO FIX:
+- Spelling mistakes
+- Transcription errors (words that sound similar but are wrong — e.g. "their" vs "there", "its" vs "it's", "Sam Lesson" → "Sam Lessin")
+- Missing or wrong punctuation that changes readability
+- Clear word substitution errors from auto-transcription (e.g. "boardroom" transcribed as "bored room")
+
+WHAT NOT TO TOUCH:
+- Do not rephrase or reword anything
+- Do not change sentence structure
+- Do not add words that weren't there
+- Do not remove words unless they are clearly a duplicate transcription error
+- Do not change names unless you are confident they are misspelled
+- Do not alter timestamps, sequence numbers, or file structure
+
+Return ONLY the corrected file content. No explanation, no markdown fences, no commentary.
+
+FILE CONTENT:
+${content}`
+
+  const response = await client.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 8000,
+    messages: [{ role: "user", content: prompt }],
+  })
+
+  const textBlock = response.content.find((b) => b.type === "text")
+  if (!textBlock || textBlock.type !== "text") throw new Error("No text response")
+  return textBlock.text.trim()
 }
 
 export type PodcastResults = {
