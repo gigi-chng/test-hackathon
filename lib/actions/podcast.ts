@@ -240,6 +240,82 @@ Return ONLY valid JSON:
   }
 }
 
+export type ClipEvaluation = {
+  transcript: string
+  verdict: "post" | "edit" | "reject"
+  coldViewer: { pass: boolean; note: string }
+  opening: { pass: boolean; note: string }
+  repetition: { pass: boolean; note: string }
+  ending: { pass: boolean; note: string }
+  insider: { pass: boolean; note: string }
+  arc: { pass: boolean; note: string }
+  edits: string[]
+}
+
+export async function evaluateClip(formData: FormData): Promise<ClipEvaluation> {
+  const OpenAI = (await import("openai")).default
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+  const audioFile = formData.get("audio") as File
+  if (!audioFile) throw new Error("No audio file received")
+
+  // Transcribe with Whisper
+  const transcription = await openai.audio.transcriptions.create({
+    file: audioFile,
+    model: "whisper-1",
+    response_format: "text",
+  })
+
+  const transcript = typeof transcription === "string" ? transcription : (transcription as { text: string }).text
+
+  // Evaluate with Claude
+  const prompt = `You are a YouTube Shorts editor evaluating a clip before it goes live. Evaluate this clip transcript against every rule below and return a structured JSON verdict.
+
+TRANSCRIPT:
+"${transcript}"
+
+EVALUATION RULES:
+
+1. COLD VIEWER — Does this make complete sense to someone who has never heard of this podcast, these speakers, or the topic being discussed? Can they follow along from the very first sentence with zero prior context?
+
+2. OPENING — Does the clip start on a clean, complete sentence? Or does it start mid-sentence, mid-exchange, or mid-thought (e.g. "You're like..." / "So as I was saying..." / "Yeah exactly, but...")? A good opening is a standalone declarative statement.
+
+3. REPETITION — Is any line, phrase, or idea repeated word-for-word or near-verbatim within the clip? Even a single repeat in the first 15 seconds kills momentum.
+
+4. ENDING — Does the clip end on a statement, claim, or punchline? Or does it end on a reaction line ("that's funny", "yeah", "totally", "I know right"), trail off, or end with someone acknowledging the point rather than making one?
+
+5. INSIDER REFERENCES — Does the clip end with or contain a reference that requires knowing the speakers personally — their investments, their history, inside jokes? (e.g. "For what it's worth I was a seed investor and I'm up 100x" requires knowing who this person is.)
+
+6. ARC — Does the clip have a clear structure: setup → build → payoff or cliffhanger? Or does it meander, switch topics, or fizzle out before the point lands?
+
+Return ONLY valid JSON with this exact structure:
+{
+  "transcript": "${transcript.replace(/"/g, '\\"')}",
+  "verdict": "post" | "edit" | "reject",
+  "coldViewer": { "pass": true | false, "note": "one sentence explanation" },
+  "opening": { "pass": true | false, "note": "one sentence explanation" },
+  "repetition": { "pass": true | false, "note": "one sentence explanation" },
+  "ending": { "pass": true | false, "note": "one sentence explanation" },
+  "insider": { "pass": true | false, "note": "one sentence explanation" },
+  "arc": { "pass": true | false, "note": "one sentence explanation" },
+  "edits": ["specific cut or change instruction 1", "instruction 2"]
+}
+
+verdict rules: "post" = passes all 6 checks. "edit" = 1-2 failures with clear fixes. "reject" = 3+ failures or the clip fundamentally doesn't work.
+edits: list the specific cuts or rewrites needed. If verdict is "post", return an empty array.`
+
+  const response = await client.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 2000,
+    messages: [{ role: "user", content: prompt }],
+  })
+
+  const textBlock = response.content.find((b) => b.type === "text")
+  if (!textBlock || textBlock.type !== "text") throw new Error("No text response")
+  const raw = textBlock.text.trim().replace(/^```json\n?/, "").replace(/\n?```$/, "")
+  return JSON.parse(raw) as ClipEvaluation
+}
+
 export async function reviewCaptions(input: { content: string; filename: string }): Promise<string> {
   const { content, filename } = input
   const ext = filename.split(".").pop()?.toLowerCase() ?? "txt"

@@ -4,8 +4,8 @@ import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { generateClipBriefs, generateIntroClip, reviewCaptions, verifyEditorPassword, type ClipBriefDoc, type IntroClip } from "@/lib/actions/podcast"
-import { FileText, Copy, Check, Lock, Clapperboard, Upload, Subtitles } from "lucide-react"
+import { generateClipBriefs, generateIntroClip, evaluateClip, verifyEditorPassword, type ClipBriefDoc, type IntroClip, type ClipEvaluation } from "@/lib/actions/podcast"
+import { FileText, Copy, Check, Lock, Clapperboard, Upload, Video, CircleCheck, CircleX } from "lucide-react"
 
 export default function PodcastToolsPage() {
   const [unlocked, setUnlocked] = useState(false)
@@ -19,11 +19,12 @@ export default function PodcastToolsPage() {
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
 
-  const [captionFile, setCaptionFile] = useState<{ name: string; content: string } | null>(null)
-  const [captionLoading, setCaptionLoading] = useState(false)
-  const [captionResult, setCaptionResult] = useState<string | null>(null)
-  const [captionError, setCaptionError] = useState<string | null>(null)
+  const [clipFileName, setClipFileName] = useState<string | null>(null)
+  const [clipStep, setClipStep] = useState<"idle" | "extracting" | "transcribing" | "evaluating" | "done" | "error">("idle")
+  const [clipEval, setClipEval] = useState<ClipEvaluation | null>(null)
+  const [clipError, setClipError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const videoFileRef = useRef<File | null>(null)
 
   useEffect(() => {
     if (localStorage.getItem("editor_unlocked") === "true") setUnlocked(true)
@@ -76,30 +77,71 @@ export default function PodcastToolsPage() {
     setTimeout(() => setCopied(null), 2000)
   }
 
-  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleVideoSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      setCaptionFile({ name: file.name, content: ev.target?.result as string })
-      setCaptionResult(null)
-      setCaptionError(null)
-    }
-    reader.readAsText(file)
+    videoFileRef.current = file
+    setClipFileName(file.name)
+    setClipEval(null)
+    setClipError(null)
+    setClipStep("idle")
   }
 
-  async function handleReviewCaptions() {
-    if (!captionFile) return
-    setCaptionLoading(true)
-    setCaptionResult(null)
-    setCaptionError(null)
+  async function extractAudioAsWav(file: File): Promise<File> {
+    const arrayBuffer = await file.arrayBuffer()
+    const audioCtx = new AudioContext({ sampleRate: 16000 })
+    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer)
+    await audioCtx.close()
+
+    const samples = audioBuffer.getChannelData(0)
+    const wavBuffer = new ArrayBuffer(44 + samples.length * 2)
+    const view = new DataView(wavBuffer)
+    const writeStr = (offset: number, str: string) => {
+      for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i))
+    }
+    writeStr(0, "RIFF")
+    view.setUint32(4, 36 + samples.length * 2, true)
+    writeStr(8, "WAVE")
+    writeStr(12, "fmt ")
+    view.setUint32(16, 16, true)
+    view.setUint16(20, 1, true)
+    view.setUint16(22, 1, true)
+    view.setUint32(24, 16000, true)
+    view.setUint32(28, 32000, true)
+    view.setUint16(32, 2, true)
+    view.setUint16(34, 16, true)
+    writeStr(36, "data")
+    view.setUint32(40, samples.length * 2, true)
+    let offset = 44
+    for (let i = 0; i < samples.length; i++) {
+      const s = Math.max(-1, Math.min(1, samples[i]))
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true)
+      offset += 2
+    }
+    return new File([wavBuffer], "clip.wav", { type: "audio/wav" })
+  }
+
+  async function handleEvaluateClip() {
+    const file = videoFileRef.current
+    if (!file) return
+    setClipEval(null)
+    setClipError(null)
+
     try {
-      const result = await reviewCaptions({ content: captionFile.content, filename: captionFile.name })
-      setCaptionResult(result)
+      setClipStep("extracting")
+      const audioFile = await extractAudioAsWav(file)
+
+      setClipStep("transcribing")
+      const formData = new FormData()
+      formData.append("audio", audioFile, "clip.wav")
+
+      setClipStep("evaluating")
+      const result = await evaluateClip(formData)
+      setClipEval(result)
+      setClipStep("done")
     } catch (e) {
-      setCaptionError(`Something went wrong: ${e instanceof Error ? e.message : String(e)}`)
-    } finally {
-      setCaptionLoading(false)
+      setClipError(`Something went wrong: ${e instanceof Error ? e.message : String(e)}`)
+      setClipStep("error")
     }
   }
 
@@ -244,61 +286,118 @@ export default function PodcastToolsPage() {
           </div>
         )}
 
-        {/* Caption proofreader */}
+        {/* Clip evaluator */}
         <Card className="mb-6">
           <CardContent className="pt-6 flex flex-col gap-4">
             <div>
-              <h2 className="font-semibold text-base mb-1">Caption Proofreader</h2>
-              <p className="text-sm text-muted-foreground">Upload a caption export (.srt, .vtt, or .txt) and get a first-pass spell check and transcription error fix.</p>
+              <h2 className="font-semibold text-base mb-1">Clip Evaluator</h2>
+              <p className="text-sm text-muted-foreground">Upload a finished clip and get a first-pass evaluation — does it make sense cold, does it start and end clean, are there gaps?</p>
             </div>
 
             <input
               ref={fileInputRef}
               type="file"
-              accept=".srt,.vtt,.txt"
+              accept="video/mp4,video/quicktime,video/mov,.mp4,.mov,.m4a,.mp3"
               className="hidden"
-              onChange={handleFileUpload}
+              onChange={handleVideoSelect}
             />
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
                 <Upload className="h-4 w-4 mr-2" />
-                {captionFile ? captionFile.name : "Upload caption file"}
+                {clipFileName ?? "Upload clip"}
               </Button>
-              {captionFile && (
-                <Button onClick={handleReviewCaptions} disabled={captionLoading}>
-                  <Subtitles className={`h-4 w-4 mr-2 ${captionLoading ? "animate-spin" : ""}`} />
-                  {captionLoading ? "Reviewing..." : "Review captions"}
+              {clipFileName && clipStep === "idle" && (
+                <Button onClick={handleEvaluateClip}>
+                  <Video className="h-4 w-4 mr-2" />
+                  Evaluate clip
                 </Button>
+              )}
+              {["extracting", "transcribing", "evaluating"].includes(clipStep) && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Video className="h-4 w-4 animate-pulse" />
+                  {clipStep === "extracting" && "Extracting audio..."}
+                  {clipStep === "transcribing" && "Transcribing..."}
+                  {clipStep === "evaluating" && "Evaluating..."}
+                </div>
               )}
             </div>
 
-            {captionError && <p className="text-sm text-destructive">{captionError}</p>}
+            {clipError && <p className="text-sm text-destructive">{clipError}</p>}
 
-            {captionResult && (
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold text-muted-foreground">CORRECTED OUTPUT</p>
-                  <Button variant="ghost" size="sm" onClick={() => copyText(captionResult, "caption-result")}>
-                    {copied === "caption-result" ? <><Check className="h-3 w-3 mr-1" />Copied</> : <><Copy className="h-3 w-3 mr-1" />Copy</>}
-                  </Button>
+            {clipEval && (
+              <div className="flex flex-col gap-4">
+                {/* Verdict banner */}
+                <div className={`rounded-md px-4 py-3 flex items-center gap-3 ${
+                  clipEval.verdict === "post"
+                    ? "bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800"
+                    : clipEval.verdict === "edit"
+                    ? "bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800"
+                    : "bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800"
+                }`}>
+                  <span className="text-2xl">
+                    {clipEval.verdict === "post" ? "✅" : clipEval.verdict === "edit" ? "✏️" : "❌"}
+                  </span>
+                  <div>
+                    <p className={`font-bold text-sm ${
+                      clipEval.verdict === "post" ? "text-green-700 dark:text-green-400"
+                      : clipEval.verdict === "edit" ? "text-amber-700 dark:text-amber-400"
+                      : "text-red-700 dark:text-red-400"
+                    }`}>
+                      {clipEval.verdict === "post" ? "Post as-is" : clipEval.verdict === "edit" ? "Needs edits" : "Don't post"}
+                    </p>
+                  </div>
                 </div>
-                <pre className="whitespace-pre-wrap text-sm leading-relaxed font-mono border rounded-md px-4 py-3 bg-muted max-h-[400px] overflow-y-auto">{captionResult}</pre>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="self-start"
-                  onClick={() => {
-                    const blob = new Blob([captionResult], { type: "text/plain" })
-                    const url = URL.createObjectURL(blob)
-                    const a = document.createElement("a")
-                    a.href = url
-                    a.download = captionFile ? `reviewed_${captionFile.name}` : "reviewed_captions.srt"
-                    a.click()
-                    URL.revokeObjectURL(url)
-                  }}
-                >
-                  Download corrected file
+
+                {/* Checks grid */}
+                <div className="grid grid-cols-1 gap-2">
+                  {([
+                    { key: "coldViewer", label: "Cold viewer" },
+                    { key: "opening", label: "Opening" },
+                    { key: "repetition", label: "No repetition" },
+                    { key: "ending", label: "Ending" },
+                    { key: "insider", label: "No insider refs" },
+                    { key: "arc", label: "Arc" },
+                  ] as const).map(({ key, label }) => {
+                    const check = clipEval[key]
+                    return (
+                      <div key={key} className="flex items-start gap-3 border rounded-md px-3 py-2.5">
+                        {check.pass
+                          ? <CircleCheck className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
+                          : <CircleX className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                        }
+                        <div>
+                          <p className="text-xs font-semibold text-muted-foreground">{label.toUpperCase()}</p>
+                          <p className="text-sm">{check.note}</p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Specific edits */}
+                {clipEval.edits.length > 0 && (
+                  <div className="border rounded-md px-4 py-3 flex flex-col gap-2">
+                    <p className="text-xs font-semibold text-muted-foreground">SUGGESTED EDITS</p>
+                    <ul className="flex flex-col gap-1.5">
+                      {clipEval.edits.map((edit, i) => (
+                        <li key={i} className="text-sm flex gap-2">
+                          <span className="text-muted-foreground shrink-0">{i + 1}.</span>
+                          <span>{edit}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Transcript */}
+                <details className="border rounded-md px-4 py-3">
+                  <summary className="text-xs font-semibold text-muted-foreground cursor-pointer">TRANSCRIPT</summary>
+                  <p className="text-sm mt-2 leading-relaxed">{clipEval.transcript}</p>
+                </details>
+
+                <Button variant="outline" size="sm" className="self-start" onClick={handleEvaluateClip}>
+                  Re-evaluate
                 </Button>
               </div>
             )}
