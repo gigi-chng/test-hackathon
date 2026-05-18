@@ -198,8 +198,122 @@ export default function PodcastToolsPage() {
   return (
     <div className="min-h-screen p-6 flex flex-col items-center gap-6">
       <div className="w-full max-w-3xl">
-        <h1 className="text-3xl font-bold mb-1">Clip Brief Generator</h1>
-        <p className="text-muted-foreground mb-6">Paste a transcript and get the top 5 Shorts briefs or a single episode intro clip.</p>
+        <h1 className="text-3xl font-bold mb-1">Podcast Tools</h1>
+        <p className="text-muted-foreground mb-6">Evaluate finished clips or generate Shorts briefs from a transcript.</p>
+
+        {/* Clip evaluator — moved to top */}
+        <Card className="mb-6">
+          <CardContent className="pt-6 flex flex-col gap-4">
+            <div>
+              <h2 className="font-semibold text-base mb-1">Clip Evaluator</h2>
+              <p className="text-sm text-muted-foreground">Upload a finished clip and get a first-pass evaluation — does it make sense cold, does it start and end clean, are there gaps?</p>
+            </div>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="video/mp4,video/quicktime,video/mov,.mp4,.mov,.m4a,.mp3"
+              className="hidden"
+              onChange={handleVideoSelect}
+            />
+
+            <div className="flex items-center gap-3 flex-wrap">
+              <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+                <Upload className="h-4 w-4 mr-2" />
+                {clipFileName ?? "Upload clip"}
+              </Button>
+              {clipFileName && clipStep === "idle" && (
+                <Button onClick={handleEvaluateClip}>
+                  <Video className="h-4 w-4 mr-2" />
+                  Evaluate clip
+                </Button>
+              )}
+              {["extracting", "transcribing", "evaluating"].includes(clipStep) && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Video className="h-4 w-4 animate-pulse" />
+                  {clipStep === "extracting" && "Extracting audio..."}
+                  {clipStep === "transcribing" && "Transcribing..."}
+                  {clipStep === "evaluating" && "Evaluating..."}
+                </div>
+              )}
+            </div>
+
+            {clipError && <p className="text-sm text-destructive">{clipError}</p>}
+
+            {clipEval && (
+              <div className="flex flex-col gap-4">
+                <div className={`rounded-md px-4 py-3 flex items-center gap-3 ${
+                  clipEval.verdict === "post"
+                    ? "bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800"
+                    : clipEval.verdict === "edit"
+                    ? "bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800"
+                    : "bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800"
+                }`}>
+                  <span className="text-2xl">
+                    {clipEval.verdict === "post" ? "✅" : clipEval.verdict === "edit" ? "✏️" : "❌"}
+                  </span>
+                  <p className={`font-bold text-sm ${
+                    clipEval.verdict === "post" ? "text-green-700 dark:text-green-400"
+                    : clipEval.verdict === "edit" ? "text-amber-700 dark:text-amber-400"
+                    : "text-red-700 dark:text-red-400"
+                  }`}>
+                    {clipEval.verdict === "post" ? "Post as-is" : clipEval.verdict === "edit" ? "Needs edits" : "Don't post"}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2">
+                  {([
+                    { key: "coldViewer", label: "Cold viewer" },
+                    { key: "opening", label: "Opening" },
+                    { key: "repetition", label: "No repetition" },
+                    { key: "ending", label: "Ending" },
+                    { key: "insider", label: "No insider refs" },
+                    { key: "arc", label: "Arc" },
+                  ] as const).map(({ key, label }) => {
+                    const check = clipEval[key]
+                    return (
+                      <div key={key} className="flex items-start gap-3 border rounded-md px-3 py-2.5">
+                        {check.pass
+                          ? <CircleCheck className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
+                          : <CircleX className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                        }
+                        <div>
+                          <p className="text-xs font-semibold text-muted-foreground">{label.toUpperCase()}</p>
+                          <p className="text-sm">{check.note}</p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {clipEval.edits.length > 0 && (
+                  <div className="border rounded-md px-4 py-3 flex flex-col gap-2">
+                    <p className="text-xs font-semibold text-muted-foreground">SUGGESTED EDITS</p>
+                    <ul className="flex flex-col gap-1.5">
+                      {clipEval.edits.map((edit, i) => (
+                        <li key={i} className="text-sm flex gap-2">
+                          <span className="text-muted-foreground shrink-0">{i + 1}.</span>
+                          <span>{edit}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <details className="border rounded-md px-4 py-3">
+                  <summary className="text-xs font-semibold text-muted-foreground cursor-pointer">TRANSCRIPT</summary>
+                  <p className="text-sm mt-2 leading-relaxed">{clipEval.transcript}</p>
+                </details>
+
+                <Button variant="outline" size="sm" className="self-start" onClick={handleEvaluateClip}>
+                  Re-evaluate
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <h2 className="text-xl font-semibold mb-3">Clip Brief Generator</h2>
 
         <Card className="mb-6">
           <CardContent className="pt-6 flex flex-col gap-4">
@@ -285,124 +399,6 @@ export default function PodcastToolsPage() {
             </Card>
           </div>
         )}
-
-        {/* Clip evaluator */}
-        <Card className="mb-6">
-          <CardContent className="pt-6 flex flex-col gap-4">
-            <div>
-              <h2 className="font-semibold text-base mb-1">Clip Evaluator</h2>
-              <p className="text-sm text-muted-foreground">Upload a finished clip and get a first-pass evaluation — does it make sense cold, does it start and end clean, are there gaps?</p>
-            </div>
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="video/mp4,video/quicktime,video/mov,.mp4,.mov,.m4a,.mp3"
-              className="hidden"
-              onChange={handleVideoSelect}
-            />
-
-            <div className="flex items-center gap-3 flex-wrap">
-              <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
-                <Upload className="h-4 w-4 mr-2" />
-                {clipFileName ?? "Upload clip"}
-              </Button>
-              {clipFileName && clipStep === "idle" && (
-                <Button onClick={handleEvaluateClip}>
-                  <Video className="h-4 w-4 mr-2" />
-                  Evaluate clip
-                </Button>
-              )}
-              {["extracting", "transcribing", "evaluating"].includes(clipStep) && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Video className="h-4 w-4 animate-pulse" />
-                  {clipStep === "extracting" && "Extracting audio..."}
-                  {clipStep === "transcribing" && "Transcribing..."}
-                  {clipStep === "evaluating" && "Evaluating..."}
-                </div>
-              )}
-            </div>
-
-            {clipError && <p className="text-sm text-destructive">{clipError}</p>}
-
-            {clipEval && (
-              <div className="flex flex-col gap-4">
-                {/* Verdict banner */}
-                <div className={`rounded-md px-4 py-3 flex items-center gap-3 ${
-                  clipEval.verdict === "post"
-                    ? "bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800"
-                    : clipEval.verdict === "edit"
-                    ? "bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800"
-                    : "bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800"
-                }`}>
-                  <span className="text-2xl">
-                    {clipEval.verdict === "post" ? "✅" : clipEval.verdict === "edit" ? "✏️" : "❌"}
-                  </span>
-                  <div>
-                    <p className={`font-bold text-sm ${
-                      clipEval.verdict === "post" ? "text-green-700 dark:text-green-400"
-                      : clipEval.verdict === "edit" ? "text-amber-700 dark:text-amber-400"
-                      : "text-red-700 dark:text-red-400"
-                    }`}>
-                      {clipEval.verdict === "post" ? "Post as-is" : clipEval.verdict === "edit" ? "Needs edits" : "Don't post"}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Checks grid */}
-                <div className="grid grid-cols-1 gap-2">
-                  {([
-                    { key: "coldViewer", label: "Cold viewer" },
-                    { key: "opening", label: "Opening" },
-                    { key: "repetition", label: "No repetition" },
-                    { key: "ending", label: "Ending" },
-                    { key: "insider", label: "No insider refs" },
-                    { key: "arc", label: "Arc" },
-                  ] as const).map(({ key, label }) => {
-                    const check = clipEval[key]
-                    return (
-                      <div key={key} className="flex items-start gap-3 border rounded-md px-3 py-2.5">
-                        {check.pass
-                          ? <CircleCheck className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
-                          : <CircleX className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
-                        }
-                        <div>
-                          <p className="text-xs font-semibold text-muted-foreground">{label.toUpperCase()}</p>
-                          <p className="text-sm">{check.note}</p>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-
-                {/* Specific edits */}
-                {clipEval.edits.length > 0 && (
-                  <div className="border rounded-md px-4 py-3 flex flex-col gap-2">
-                    <p className="text-xs font-semibold text-muted-foreground">SUGGESTED EDITS</p>
-                    <ul className="flex flex-col gap-1.5">
-                      {clipEval.edits.map((edit, i) => (
-                        <li key={i} className="text-sm flex gap-2">
-                          <span className="text-muted-foreground shrink-0">{i + 1}.</span>
-                          <span>{edit}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* Transcript */}
-                <details className="border rounded-md px-4 py-3">
-                  <summary className="text-xs font-semibold text-muted-foreground cursor-pointer">TRANSCRIPT</summary>
-                  <p className="text-sm mt-2 leading-relaxed">{clipEval.transcript}</p>
-                </details>
-
-                <Button variant="outline" size="sm" className="self-start" onClick={handleEvaluateClip}>
-                  Re-evaluate
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
 
         {/* Shorts clips */}
         {briefDoc && (
