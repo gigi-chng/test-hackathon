@@ -104,22 +104,22 @@ async function scoreTrend(trendEmbedding: number[]): Promise<{
 
 // ─── Check for duplicate drafts ───────────────────────────────────────────────
 
-async function isDuplicate(trendEmbedding: number[]): Promise<boolean> {
-  // Check against recently drafted trend signals (same article run through pipeline before)
+async function buildDedupCache(): Promise<number[][]> {
   const recentSignals = await prisma.trendSignal.findMany({
     where: {
       status: "drafted",
-      detectedAt: { gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) },
+      detectedAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
     },
     select: { headline: true, summary: true },
   })
+  // Embed all historical signals in parallel (one batch, not per-article)
+  return Promise.all(recentSignals.map(s => embed(`${s.headline} ${s.summary}`)))
+}
 
-  for (const signal of recentSignals) {
-    const signalEmbedding = await embed(`${signal.headline} ${signal.summary}`)
-    const sim = cosineSimilarity(trendEmbedding, signalEmbedding)
-    if (sim > 0.85) return true
+function isDuplicate(trendEmbedding: number[], cachedEmbeddings: number[][]): boolean {
+  for (const signalEmbedding of cachedEmbeddings) {
+    if (cosineSimilarity(trendEmbedding, signalEmbedding) > 0.85) return true
   }
-
   return false
 }
 
@@ -450,7 +450,7 @@ export async function runAgentPipeline(): Promise<{ drafted: number; skipped: nu
   const pendingCount = await prisma.postDraft.count({ where: { status: "pending" } })
   if (pendingCount >= 5) return { drafted: 0, skipped: 0, reason: "Draft queue full (5 pending)" }
 
-  const news = await fetchTrendingNews()
+  const [news, dedupCache] = await Promise.all([fetchTrendingNews(), buildDedupCache()])
   let skipped = 0
 
   // Score all articles, pick the single highest-scoring one per run
@@ -460,9 +460,15 @@ export async function runAgentPipeline(): Promise<{ drafted: number; skipped: nu
     match: { score: number; partner: string; citation: string; sourceUrl: string }
   } | null = null
 
-  for (const article of news) {
-    const trendEmbedding = await embed(`${article.headline} ${article.summary}`)
-    if (await isDuplicate(trendEmbedding)) { skipped++; continue }
+  // Embed all articles in parallel, then score sequentially
+  const articleEmbeddings = await Promise.all(
+    news.map(a => embed(`${a.headline} ${a.summary}`))
+  )
+
+  for (let i = 0; i < news.length; i++) {
+    const article = news[i]
+    const trendEmbedding = articleEmbeddings[i]
+    if (isDuplicate(trendEmbedding, dedupCache)) { skipped++; continue }
     const match = await scoreTrend(trendEmbedding)
     if (!match || match.score < 0.45) { skipped++; continue }
     if (!best || match.score > best.match.score) {
