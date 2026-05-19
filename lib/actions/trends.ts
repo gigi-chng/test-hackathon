@@ -67,6 +67,20 @@ async function fetchTrendingNews(): Promise<{ headline: string; summary: string;
 
 // ─── Score trend against partner knowledge base ───────────────────────────────
 
+function isReplyStyleCitation(content: string): boolean {
+  const t = content.trim()
+  // Too short to stand alone as a quote card
+  if (t.length < 60) return true
+  // References another Twitter user (reply to someone)
+  if (/@[a-zA-Z0-9_]{1,15}/.test(t)) return true
+  // Starts with reply-only openers that make no sense without the original tweet
+  const replyOpeners = /^(exactly|this\.|yes\.|yep\.|💯|👆|👇|☝️|right\.|agreed\.|same\.|lol\.|ha\.|haha\.|wow\.|true\.|correct\.|indeed\.|totally\.|absolutely\.|fair\.)/i
+  if (replyOpeners.test(t)) return true
+  // Contains "this tweet", "that tweet", "the tweet"
+  if (/\b(this|that|the) tweet\b/i.test(t)) return true
+  return false
+}
+
 async function scoreTrend(trendEmbedding: number[]): Promise<{
   score: number
   partner: string
@@ -74,7 +88,7 @@ async function scoreTrend(trendEmbedding: number[]): Promise<{
   sourceUrl: string
 } | null> {
   const allContent = await prisma.partnerContent.findMany({
-    select: { partner: true, content: true, sourceUrl: true, title: true, embedding: true },
+    select: { partner: true, content: true, sourceUrl: true, title: true, embedding: true, sourceType: true },
   })
 
   if (allContent.length === 0) return null
@@ -90,10 +104,14 @@ async function scoreTrend(trendEmbedding: number[]): Promise<{
       const cleanedContent = lastSoftHyphen > 0 && lastSoftHyphen < item.content.length - 20
         ? item.content.slice(lastSoftHyphen + 1).trim()
         : item.content.trim()
+      // Strip URLs from citation text
+      const citationText = cleanedContent.replace(/https?:\/\/\S+/g, "").replace(/\s+/g, " ").trim().slice(0, 500)
+      // Skip citations that are tweet replies or too short to stand alone
+      if (isReplyStyleCitation(citationText)) continue
       best = {
         score,
         partner: item.partner,
-        citation: cleanedContent.slice(0, 500),
+        citation: citationText,
         sourceUrl: item.sourceUrl || "",
       }
     }

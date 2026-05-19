@@ -42,7 +42,18 @@ export async function GET(req: NextRequest) {
   }
 
   const partner = PARTNER_DISPLAY[partnerKey] || PARTNER_DISPLAY.sam
-  const cleanQuote = quote.replace(/https?:\/\/\S+/g, "").replace(/\s+/g, " ").trim()
+  // Strip URLs, @mentions, and extra whitespace
+  const cleanQuote = quote
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/@[a-zA-Z0-9_]{1,15}/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+
+  // If the cleaned quote is too short to stand alone, return 400 so Telegram skips the card
+  if (cleanQuote.length < 60) {
+    return new Response("Citation too short for quote card", { status: 400 })
+  }
+
   const displayQuote = cleanQuote.length > 260 ? cleanQuote.slice(0, 257) + "..." : cleanQuote
 
   const publicDir = path.join(process.cwd(), "public")
