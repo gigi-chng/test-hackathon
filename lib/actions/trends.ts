@@ -356,10 +356,36 @@ async function findTweetToQuote(headline: string, keywords: string): Promise<{ i
 
 async function findMatchingVideo(trendEmbedding: number[]): Promise<{ id: string; title: string; partner: string; storageUrl: string } | null> {
   const videos = await prisma.videoLibrary.findMany({
-    select: { id: true, title: true, partner: true, storageUrl: true, embedding: true },
+    select: { id: true, title: true, partner: true, storageUrl: true, embedding: true, forcedNext: true },
   })
 
+  // Tier 1: force-queued video — use it regardless of similarity
+  const forced = videos.find(v => v.forcedNext)
+  if (forced) {
+    await prisma.videoLibrary.update({ where: { id: forced.id }, data: { forcedNext: false } })
+    return { id: forced.id, title: forced.title, partner: forced.partner, storageUrl: forced.storageUrl }
+  }
+
+  // Get IDs of videos already used in approved/published drafts
+  const usedDrafts = await prisma.postDraft.findMany({
+    where: { status: { in: ["approved", "published"] }, videoId: { not: null } },
+    select: { videoId: true },
+  })
+  const usedVideoIds = new Set(usedDrafts.map(d => d.videoId!))
+
+  // Tier 2: unposted videos at lower threshold (0.4)
   let best: { id: string; title: string; partner: string; storageUrl: string; score: number } | null = null
+  for (const video of videos) {
+    if (!video.embedding || video.embedding.length === 0) continue
+    if (usedVideoIds.has(video.id)) continue
+    const sim = cosineSimilarity(trendEmbedding, video.embedding)
+    if (sim > 0.4 && (!best || sim > best.score)) {
+      best = { id: video.id, title: video.title, partner: video.partner, storageUrl: video.storageUrl, score: sim }
+    }
+  }
+  if (best) return { id: best.id, title: best.title, partner: best.partner, storageUrl: best.storageUrl }
+
+  // Tier 3: any video above 0.55 (original behavior)
   for (const video of videos) {
     if (!video.embedding || video.embedding.length === 0) continue
     const sim = cosineSimilarity(trendEmbedding, video.embedding)

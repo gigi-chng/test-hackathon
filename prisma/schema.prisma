@@ -92,6 +92,7 @@ model VideoLibrary {
   topics     String[]
   embedding  Float[]
   duration   Int?
+  forcedNext Boolean  @default(false)
   uploadedAt DateTime @default(now())
 
   @@map("video_library")

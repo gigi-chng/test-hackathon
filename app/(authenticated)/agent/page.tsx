@@ -6,8 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ingestPartnerBlog, ingestAllPartners } from "@/lib/actions/ingest"
 import { type Partner } from "@/lib/partners"
-import { getPendingDrafts, getAllDrafts, getContentCount, triggerPipeline } from "@/lib/actions/agent"
-import { RefreshCw, Users, CheckCircle, AlertCircle, Zap, Clock, Send, Megaphone } from "lucide-react"
+import { getPendingDrafts, getAllDrafts, getContentCount, triggerPipeline, getVideoLibraryStatus, forceNextVideo } from "@/lib/actions/agent"
+import { RefreshCw, Users, CheckCircle, AlertCircle, Zap, Clock, Send, Megaphone, Video, Pin } from "lucide-react"
 import Link from "next/link"
 
 const PARTNERS: { key: Partner; name: string; sources: string[] }[] = [
@@ -37,6 +37,15 @@ type Draft = {
 
 type ContentCount = { partner: string; _count: { id: number } }
 
+type VideoStatus = {
+  id: string
+  partner: string
+  title: string
+  forcedNext: boolean
+  posted: boolean
+  publishedAt: Date | null
+}
+
 export default function AgentPage() {
   const [allStatus, setAllStatus] = useState<Status>("idle")
   const [partnerStatus, setPartnerStatus] = useState<Record<string, Status>>({})
@@ -45,12 +54,27 @@ export default function AgentPage() {
   const [pipelineResult, setPipelineResult] = useState<{ drafted: number; skipped: number; reason?: string } | null>(null)
   const [drafts, setDrafts] = useState<Draft[]>([])
   const [contentCounts, setContentCounts] = useState<ContentCount[]>([])
+  const [videos, setVideos] = useState<VideoStatus[]>([])
+  const [forcingId, setForcingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     loadDrafts()
     loadContentCounts()
+    loadVideos()
   }, [])
+
+  async function loadVideos() {
+    const v = await getVideoLibraryStatus()
+    setVideos(v as VideoStatus[])
+  }
+
+  async function handleForceNext(id: string) {
+    setForcingId(id)
+    await forceNextVideo(id)
+    await loadVideos()
+    setForcingId(null)
+  }
 
   async function loadDrafts() {
     const d = await getAllDrafts()
@@ -211,6 +235,54 @@ export default function AgentPage() {
                     Drawing on <strong>{PARTNER_NAMES[draft.partner] || draft.partner}</strong>
                     {draft.videoId && " · video attached"}
                   </p>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Video Library */}
+        {videos.length > 0 && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Video className="h-4 w-4" />
+                Video Library
+                <span className="ml-auto text-xs font-normal text-muted-foreground">
+                  {videos.filter(v => v.posted).length}/{videos.length} posted
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              <p className="text-sm text-muted-foreground mb-2">
+                Unposted videos get priority at the next pipeline run. Use "Force next" to guarantee a specific video is included.
+              </p>
+              {videos.map(v => (
+                <div key={v.id} className="flex items-center gap-3 rounded-lg border px-3 py-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{v.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {PARTNER_NAMES[v.partner] || v.partner}
+                      {v.posted && v.publishedAt && ` · posted ${new Date(v.publishedAt).toLocaleDateString()}`}
+                      {v.posted && !v.publishedAt && " · approved"}
+                    </p>
+                  </div>
+                  {v.posted ? (
+                    <Badge variant="default" className="shrink-0">Posted</Badge>
+                  ) : v.forcedNext ? (
+                    <Badge variant="secondary" className="shrink-0 bg-amber-100 text-amber-800">Queued next</Badge>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="shrink-0 h-7 text-xs"
+                      disabled={forcingId === v.id}
+                      onClick={() => handleForceNext(v.id)}
+                    >
+                      <Pin className="mr-1 h-3 w-3" />
+                      Force next
+                    </Button>
+                  )}
                 </div>
               ))}
             </CardContent>
