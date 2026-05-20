@@ -8,11 +8,28 @@ async function uploadVideoToTwitter(
   keys: { twitterKey: string; twitterSecret: string; twitterToken: string; twitterTokenSecret: string }
 ): Promise<string | null> {
   try {
-    // Download from Google Drive
+    // Download from Google Drive (handles large file virus-scan confirmation)
     const driveFileId = videoUrl.match(/\/d\/([^/]+)\//)?.[1]
     if (!driveFileId) return null
-    const downloadUrl = `https://drive.google.com/uc?export=download&id=${driveFileId}&confirm=t`
-    const videoRes = await fetch(downloadUrl)
+    const downloadUrl = `https://drive.google.com/uc?export=download&id=${driveFileId}`
+    const firstRes = await fetch(downloadUrl, { redirect: "manual" })
+    let videoRes: Response
+    if (firstRes.status === 303 || firstRes.status === 302 || firstRes.status === 301) {
+      // Small file redirect — follow it
+      const location = firstRes.headers.get("location")!
+      videoRes = await fetch(location)
+    } else if (firstRes.headers.get("content-type")?.includes("text/html")) {
+      // Large file — Google returns an HTML confirmation page, extract the confirm token
+      const html = await firstRes.text()
+      const confirmMatch = html.match(/confirm=([0-9A-Za-z_-]+)/) || html.match(/name="confirm" value="([^"]+)"/)
+      const confirm = confirmMatch?.[1] ?? "t"
+      const cookies = firstRes.headers.get("set-cookie") ?? ""
+      videoRes = await fetch(`https://drive.google.com/uc?export=download&id=${driveFileId}&confirm=${confirm}`, {
+        headers: { Cookie: cookies },
+      })
+    } else {
+      videoRes = firstRes
+    }
     if (!videoRes.ok) return null
     const videoBuffer = Buffer.from(await videoRes.arrayBuffer())
     const totalBytes = videoBuffer.length

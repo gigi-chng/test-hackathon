@@ -17,6 +17,7 @@
     "app/api/agent/cron/route.ts": { "maxDuration": 300 },
     "app/api/agent/scheduler/route.ts": { "maxDuration": 300 },
     "app/api/agent/telegram/route.ts": { "maxDuration": 300 },
+    "app/api/agent/approve/route.ts": { "maxDuration": 300 },
     "app/api/quote-card/route.tsx": { "maxDuration": 30 }
   }
 }
