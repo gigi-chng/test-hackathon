@@ -23,7 +23,8 @@ type Draft = {
   videoId: string | null
   videoTitle: string | null
   videoStorageUrl: string | null
-  partnerSourceUrl: string | null
+  partnerSourceUrl: string | null   // trend headline
+  quoteTweetUrl: string | null      // URL of the inspiring tweet
   status: string
   createdAt: Date
 }
@@ -253,9 +254,7 @@ function DraftCard({
   const driveFileId = draft.videoStorageUrl?.match(/\/d\/([^/?]+)/)?.[1] ?? null
   const embedUrl = driveFileId ? `https://drive.google.com/file/d/${driveFileId}/preview` : null
 
-  const trendLabel = draft.partnerSourceUrl
-    ? (draft.partnerSourceUrl.startsWith("http") ? "Trending topic" : draft.partnerSourceUrl.slice(0, 60))
-    : null
+  const trendLabel = draft.partnerSourceUrl?.startsWith("http") ? null : (draft.partnerSourceUrl ?? null)
 
   return (
     <Card>
@@ -263,11 +262,23 @@ function DraftCard({
 
         {/* Header */}
         <div className="flex items-start justify-between gap-2">
-          <div className="flex flex-col gap-1 min-w-0">
+          <div className="flex flex-col gap-1.5 min-w-0">
             {trendLabel && (
-              <Badge className="w-fit bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-100 text-xs font-normal">
-                {trendLabel}
-              </Badge>
+              <div className="flex flex-col gap-1">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Trending moment</p>
+                <p className="text-sm font-medium leading-snug">{trendLabel}</p>
+                {draft.quoteTweetUrl && (
+                  <a
+                    href={draft.quoteTweetUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 hover:underline w-fit"
+                  >
+                    <Twitter className="h-3 w-3" />
+                    View on X — works as a quote reply
+                  </a>
+                )}
+              </div>
             )}
             <p className="text-xs text-muted-foreground">
               {PARTNER_NAMES[draft.partner] || draft.partner}

@@ -928,6 +928,10 @@ export async function generateVideoDraftsFromTrends(): Promise<{
       trend
     )
 
+    // For X/Twitter topics, extract tweet ID so the draft can be posted as a quote-tweet reply
+    const tweetIdMatch = trend.url?.match(/\/status\/(\d+)/)
+    const tweetId = tweetIdMatch?.[1] ?? null
+
     await prisma.postDraft.create({
       data: {
         partner,
@@ -938,7 +942,9 @@ export async function generateVideoDraftsFromTrends(): Promise<{
         videoId: video.id,
         status: "pending",
         source: "video",
-        partnerSourceUrl: trend.headline,
+        partnerSourceUrl: trend.headline,   // trend context text
+        quoteTweetId: tweetId,              // tweet ID for quote-tweeting
+        quoteTweetUrl: trend.source === "X" ? trend.url : null,  // link to the inspiring tweet
       },
     })
 
