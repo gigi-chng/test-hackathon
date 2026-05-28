@@ -708,110 +708,242 @@ Return ONLY valid JSON:
   }
 }
 
-// ─── Schedule video queue ─────────────────────────────────────────────────────
+// ─── Fetch trending tech tweets as topics ─────────────────────────────────────
 
-export async function scheduleVideoQueue(): Promise<{
-  scheduled: number
-  slots: { title: string; partner: string; scheduledAt: string }[]
-  message?: string
-}> {
-  // 1. Get all unposted videos (not already in an approved/published/scheduled draft)
-  const [allVideos, usedDrafts] = await Promise.all([
-    prisma.videoLibrary.findMany({
-      select: { id: true, partner: true, title: true, topics: true, transcript: true, embedding: true },
-    }),
-    prisma.postDraft.findMany({
-      where: { status: { in: ["approved", "published", "scheduled"] }, videoId: { not: null } },
-      select: { videoId: true },
-    }),
-  ])
+async function fetchTrendingTechTweetsAsTopics(): Promise<{ headline: string; summary: string; url: string; source: string }[]> {
+  const bearerToken = process.env.TWITTER_BEARER_TOKEN
+  if (!bearerToken) return []
 
-  const usedVideoIds = new Set(usedDrafts.map(d => d.videoId!))
-  const unposted = allVideos.filter(v => !usedVideoIds.has(v.id) && v.embedding && v.embedding.length > 0 && v.transcript)
+  try {
+    const query = encodeURIComponent(`(AI OR startup OR "venture capital" OR fintech OR SaaS OR "series A") min_faves:100 -is:retweet lang:en`)
+    const url = `https://api.twitter.com/2/tweets/search/recent?query=${query}&max_results=20&tweet.fields=public_metrics,text&expansions=author_id&user.fields=username`
 
-  if (unposted.length === 0) return { scheduled: 0, slots: [], message: "No unposted videos with transcripts found — add transcripts to videos in the library first" }
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${bearerToken}` },
+      next: { revalidate: 0 },
+    })
+    const data = await res.json()
 
-  // 2. Get recent partner content (30 days), fall back to latest 100 if sparse
-  const thirtyDaysAgo = new Date()
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    if (!data.data || !Array.isArray(data.data)) return []
 
-  let recentContent = await prisma.partnerContent.findMany({
-    where: { createdAt: { gte: thirtyDaysAgo } },
-    select: { partner: true, content: true, sourceUrl: true, embedding: true },
+    const sorted = [...data.data].sort((a: { public_metrics: { like_count: number; retweet_count: number } }, b: { public_metrics: { like_count: number; retweet_count: number } }) =>
+      (b.public_metrics.like_count + b.public_metrics.retweet_count) -
+      (a.public_metrics.like_count + a.public_metrics.retweet_count)
+    )
+
+    return sorted.slice(0, 10).map((tweet: { id: string; text: string; author_id: string }) => {
+      const username = data.includes?.users?.find((u: { id: string; username: string }) => u.id === tweet.author_id)?.username ?? "unknown"
+      return {
+        headline: tweet.text.slice(0, 100),
+        summary: tweet.text,
+        url: `https://twitter.com/${username}/status/${tweet.id}`,
+        source: "X",
+      }
+    })
+  } catch (e) {
+    console.error("fetchTrendingTechTweetsAsTopics failed:", e)
+    return []
+  }
+}
+
+// ─── Generate video post draft with trend ────────────────────────────────────
+
+async function generateVideoPostDraftWithTrend(
+  video: { title: string; transcript: string; topics: string[] },
+  partner: string,
+  trend: { headline: string; summary: string }
+): Promise<{ hook: string; body: string; citation: string }> {
+  const partnerNames: Record<string, string> = {
+    sam: "Sam Lessin", will: "Will Quist", yoni: "Yoni Rechtman", megan: "Megan Lightcap",
+  }
+  const partnerHandles: Record<string, string> = {
+    sam: "@lessin", will: "@wquist", yoni: "@yrechtman", megan: "@mmlightcap",
+  }
+  const name = partnerNames[partner] || partner
+  const handle = partnerHandles[partner] || ""
+
+  const voiceSamples = await prisma.partnerContent.findMany({
+    where: { partner, sourceType: "tweet" },
+    orderBy: { createdAt: "desc" },
+    take: 5,
+    select: { content: true },
+  })
+  const voiceExamples = voiceSamples.map((s, i) => `${i + 1}. "${s.content}"`).join("\n")
+
+  const pastFeedback = await prisma.postDraft.findMany({
+    where: { feedback: { not: null } },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+    select: { feedback: true },
+  })
+  const feedbackSection = pastFeedback.length > 0
+    ? `\nPast feedback to incorporate:\n${pastFeedback.map((f, i) => `${i + 1}. ${f.feedback}`).join("\n")}\n`
+    : ""
+
+  const response = await anthropic.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 1800,
+    messages: [{
+      role: "user",
+      content: `You are creating social posts for ${name} at Slow Ventures that connect a specific video insight to what's trending right now on X.
+
+TRENDING MOMENT:
+"${trend.headline}"
+${trend.summary}
+
+VIDEO: "${video.title}"
+TRANSCRIPT:
+${video.transcript.slice(0, 3000)}
+
+VOICE SAMPLES (match this exactly):
+${voiceExamples}
+${feedbackSection}
+Your job: find the sharpest, most specific insight from the transcript that directly relates to the trending moment. Build both posts around that specific connection.
+
+X POST (under 220 characters, not counting handle appended separately):
+- Name the specific trend or company from the trending moment
+- Connect it to a specific insight from the transcript — a quote, a number, a named company, a concrete claim
+- Declarative and confident. No questions, no em dashes, no hashtags, no emojis
+- Write something that makes someone want to share it in a VC group chat
+
+LINKEDIN POST (600-900 characters):
+- Line 1: One sharp hook connecting the trending moment to the video insight. Name the specific company/trend/number.
+- Lines 2-4: Show the mechanism — why does this specific insight matter in light of the trend? What does it reveal that most people miss?
+- Final line: Confident declarative. No questions.
+- No em dashes, no hashtags, no bullet points
+
+Return ONLY valid JSON:
+{ "twitter": "...", "linkedin": "...", "citation": "exact quote or key line from transcript the posts are built around" }`,
+    }],
   })
 
-  if (recentContent.length < 20) {
-    recentContent = await prisma.partnerContent.findMany({
-      select: { partner: true, content: true, sourceUrl: true, embedding: true },
-      orderBy: { createdAt: "desc" },
-      take: 100,
-    })
+  const text = response.content[0]
+  if (text.type !== "text") throw new Error("No text response")
+  const raw = text.text.trim().replace(/^```json\n?/, "").replace(/\n?```$/, "")
+  const parsed = JSON.parse(raw)
+  const strip = (t: string) => t.replace(/—/g, "-").replace(/–/g, "-")
+
+  return {
+    hook: strip(`${parsed.twitter}\n\n${handle}`),
+    body: strip(parsed.linkedin),
+    citation: parsed.citation || video.title,
+  }
+}
+
+// ─── Generate video drafts from trends ───────────────────────────────────────
+
+export async function generateVideoDraftsFromTrends(): Promise<{
+  generated: number
+  drafts: { title: string; partner: string; trend: string }[]
+  message?: string
+}> {
+  // 1. Fetch trending topics from both news and X
+  const [newsTopics, tweetTopics] = await Promise.all([
+    fetchTrendingNews().catch(() => [] as { headline: string; summary: string; url: string; source: string }[]),
+    fetchTrendingTechTweetsAsTopics(),
+  ])
+
+  // X topics first, then news; deduplicate by headline
+  const combined = [...tweetTopics, ...newsTopics]
+  const seenHeadlines = new Set<string>()
+  const topics = combined.filter(t => {
+    const key = t.headline.slice(0, 60).toLowerCase()
+    if (seenHeadlines.has(key)) return false
+    seenHeadlines.add(key)
+    return true
+  })
+
+  // 2. Get all videos with transcript + embedding
+  const allVideos = await prisma.videoLibrary.findMany({
+    select: { id: true, partner: true, title: true, topics: true, transcript: true, embedding: true, storageUrl: true },
+  })
+
+  // 3. Get recently used video IDs (3-month cooldown)
+  const threeMonthsAgo = new Date()
+  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3)
+
+  const recentVideoDrafts = await prisma.postDraft.findMany({
+    where: {
+      source: "video",
+      createdAt: { gte: threeMonthsAgo },
+      videoId: { not: null },
+    },
+    select: { videoId: true },
+  })
+  const recentVideoIds = new Set(recentVideoDrafts.map(d => d.videoId!))
+
+  // 4. Filter to available videos
+  const availableVideos = allVideos.filter(v =>
+    v.transcript &&
+    v.embedding &&
+    v.embedding.length > 0 &&
+    !recentVideoIds.has(v.id)
+  )
+
+  if (availableVideos.length === 0) {
+    return { generated: 0, drafts: [], message: "No available videos — all have been used in the last 3 months or lack transcripts" }
   }
 
-  if (recentContent.length === 0) return { scheduled: 0, slots: [], message: "No partner content in knowledge base — run Sync All Partners first" }
+  // 5. Embed up to 30 topics in parallel
+  const topicsToEmbed = topics.slice(0, 30)
+  const topicEmbeddings = await Promise.all(topicsToEmbed.map(t => embed(`${t.headline} ${t.summary}`)))
 
-  // 3. Score each unposted video against recent partner content
-  type Match = { videoId: string; videoTitle: string; videoTopics: string[]; videoTranscript: string; partner: string; score: number; citationUrl: string }
-  const allMatches: Match[] = []
+  // 6. Score all (topic, video) pairs, collect those above threshold
+  type Pair = { topicIdx: number; videoIdx: number; score: number }
+  const pairs: Pair[] = []
 
-  for (const video of unposted) {
-    let bestScore = 0, bestPartner = "", bestCitationUrl = ""
-
-    for (const item of recentContent) {
-      if (!item.embedding || item.embedding.length === 0) continue
-      const score = cosineSimilarity(video.embedding, item.embedding)
-      if (score > bestScore) {
-        const cleaned = item.content.replace(/https?:\/\/\S+/g, "").replace(/\s+/g, " ").trim()
-        if (cleaned.length < 60) continue
-        bestScore = score
-        bestPartner = item.partner
-        bestCitationUrl = item.sourceUrl || ""
-      }
-    }
-
-    if (bestScore > 0.25 && bestPartner) {
-      allMatches.push({
-        videoId: video.id,
-        videoTitle: video.title,
-        videoTopics: video.topics,
-        videoTranscript: video.transcript!,
-        partner: bestPartner,
-        score: bestScore,
-        citationUrl: bestCitationUrl,
-      })
+  for (let ti = 0; ti < topicsToEmbed.length; ti++) {
+    for (let vi = 0; vi < availableVideos.length; vi++) {
+      const score = cosineSimilarity(topicEmbeddings[ti], availableVideos[vi].embedding!)
+      if (score > 0.25) pairs.push({ topicIdx: ti, videoIdx: vi, score })
     }
   }
 
-  allMatches.sort((a, b) => b.score - a.score)
-  const top = allMatches.slice(0, 7)
+  // 7. Sort by score descending, pick top 5 with unique videos
+  pairs.sort((a, b) => b.score - a.score)
+  const usedVideoIndices = new Set<number>()
+  const topPairs: Pair[] = []
+  for (const pair of pairs) {
+    if (usedVideoIndices.has(pair.videoIdx)) continue
+    usedVideoIndices.add(pair.videoIdx)
+    topPairs.push(pair)
+    if (topPairs.length >= 5) break
+  }
 
-  if (top.length === 0) return { scheduled: 0, slots: [], message: "No videos matched recent partner content (try syncing the knowledge base)" }
+  if (topPairs.length === 0) {
+    return { generated: 0, drafts: [], message: "No strong matches found between trending topics and your video library" }
+  }
 
-  const results: { title: string; partner: string }[] = []
+  // 8. Generate drafts for each match
+  const results: { title: string; partner: string; trend: string }[] = []
 
-  // 5. Generate drafts from transcript and save as pending (no scheduledAt yet)
-  for (const match of top) {
-    const { hook, body, citation } = await generateVideoPostDraft(
-      { title: match.videoTitle, transcript: match.videoTranscript, topics: match.videoTopics },
-      match.partner
+  for (const pair of topPairs) {
+    const video = availableVideos[pair.videoIdx]
+    const trend = topicsToEmbed[pair.topicIdx]
+    const partner = video.partner
+
+    const { hook, body, citation } = await generateVideoPostDraftWithTrend(
+      { title: video.title, transcript: video.transcript!, topics: video.topics },
+      partner,
+      trend
     )
 
     await prisma.postDraft.create({
       data: {
-        partner: match.partner,
+        partner,
         partnerCitation: citation,
         hook,
         body,
         platform: "both",
-        videoId: match.videoId,
+        videoId: video.id,
         status: "pending",
         source: "video",
-        partnerSourceUrl: match.citationUrl || null,
+        partnerSourceUrl: trend.headline,
       },
     })
 
-    results.push({ title: match.videoTitle, partner: match.partner })
+    results.push({ title: video.title, partner, trend: trend.headline })
   }
 
-  return { scheduled: results.length, slots: results.map(r => ({ ...r, scheduledAt: "" })) }
+  return { generated: results.length, drafts: results }
 }

@@ -1,7 +1,7 @@
 "use server"
 
 import { prisma } from "@/lib/db/prisma"
-import { runAgentPipeline, scheduleVideoQueue as runScheduleVideoQueue } from "@/lib/actions/trends"
+import { runAgentPipeline, generateVideoDraftsFromTrends as runGenerateVideoDrafts } from "@/lib/actions/trends"
 import { syncDriveFolder as runDriveSync } from "@/lib/actions/drive-sync"
 
 export async function syncDriveFolder() {
@@ -62,8 +62,8 @@ export async function getVideoLibraryStatus() {
   }))
 }
 
-export async function scheduleVideoQueue() {
-  return runScheduleVideoQueue()
+export async function generateVideoDraftsFromTrends() {
+  return runGenerateVideoDrafts()
 }
 
 export async function getVideoDrafts() {
