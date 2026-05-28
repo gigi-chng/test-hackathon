@@ -201,6 +201,9 @@ function DraftCard({
   const isEditing = editingId === draft.id
   const [aiPrompt, setAiPrompt] = useState("")
 
+  const driveFileId = draft.videoStorageUrl?.match(/\/d\/([^/?]+)/)?.[1] ?? null
+  const embedUrl = driveFileId ? `https://drive.google.com/file/d/${driveFileId}/preview` : null
+
   const trendLabel = draft.partnerSourceUrl
     ? (draft.partnerSourceUrl.startsWith("http") ? "Trending topic" : draft.partnerSourceUrl.slice(0, 60))
     : null
@@ -235,6 +238,13 @@ function DraftCard({
             </Button>
           )}
         </div>
+
+        {/* Video preview */}
+        {embedUrl && (
+          <div className="rounded-md overflow-hidden bg-black aspect-video w-full">
+            <iframe src={embedUrl} className="w-full h-full" allow="autoplay" allowFullScreen />
+          </div>
+        )}
 
         {/* Content */}
         {isEditing ? (
