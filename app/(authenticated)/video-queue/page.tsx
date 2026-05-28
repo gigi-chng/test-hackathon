@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import React, { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -9,6 +9,9 @@ import {
   updateDraft, deleteDraft, approveVideoDraft, rewriteDraftWithAI,
   publishNow, syncDriveFolder,
 } from "@/lib/actions/agent"
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table"
 import { CalendarDays, Video, Pencil, Trash2, Check, X, RefreshCw, Sparkles, Send, FolderSync } from "lucide-react"
 
 const PARTNER_NAMES: Record<string, string> = {
@@ -188,7 +191,7 @@ export default function VideoQueuePage() {
           </section>
         )}
 
-        {/* Approved / Scheduled */}
+        {/* Approved / Scheduled — table view */}
         {scheduled.length > 0 && (
           <section className="flex flex-col gap-3">
             <div className="flex items-center justify-between">
@@ -197,7 +200,90 @@ export default function VideoQueuePage() {
                 <RefreshCw className="h-3.5 w-3.5" />
               </Button>
             </div>
-            {scheduled.map(draft => <DraftCard key={draft.id} draft={draft} showApprove={false} {...cardProps} />)}
+            <div className="rounded-lg border overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[120px]">Partner</TableHead>
+                    <TableHead>Video</TableHead>
+                    <TableHead>Twitter</TableHead>
+                    <TableHead className="w-[140px]">Scheduled</TableHead>
+                    <TableHead className="w-[180px] text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {scheduled.map(draft => {
+                    const result = publishResults[draft.id]
+                    const isEditing = editingId === draft.id
+                    return (
+                      <React.Fragment key={draft.id}>
+                        <TableRow className={isEditing ? "bg-muted/40" : undefined}>
+                          <TableCell className="font-medium text-sm">{PARTNER_NAMES[draft.partner] || draft.partner}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground max-w-[160px] truncate">{draft.videoTitle ?? "—"}</TableCell>
+                          <TableCell className="text-sm max-w-[260px]">
+                            {isEditing
+                              ? <span className="text-xs text-muted-foreground italic">editing...</span>
+                              : <p className="truncate text-muted-foreground">{draft.hook.split("\n")[0]}</p>}
+                            {result && !isEditing && (
+                              <p className="text-xs mt-0.5 text-muted-foreground">
+                                {result.twitter ? "✓ Twitter" : "✗ Twitter"} · {result.linkedin ? "✓ LinkedIn" : "✗ LinkedIn"}
+                              </p>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                            {draft.scheduledAt ? fmtSlot(draft.scheduledAt) : "—"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {!isEditing && (
+                                <Button size="sm" className="h-7 px-2 gap-1 text-xs" disabled={publishingId === draft.id} onClick={() => handlePublishNow(draft.id)}>
+                                  <Send className={`h-3 w-3 ${publishingId === draft.id ? "animate-pulse" : ""}`} />
+                                  {publishingId === draft.id ? "..." : "Publish"}
+                                </Button>
+                              )}
+                              {isEditing
+                                ? <>
+                                    <Button size="sm" className="h-7 px-2 gap-1 text-xs" disabled={savingId === draft.id} onClick={() => saveEdit(draft.id)}>
+                                      <Check className="h-3 w-3" />{savingId === draft.id ? "..." : "Save"}
+                                    </Button>
+                                    <Button size="sm" variant="outline" className="h-7 px-2 gap-1 text-xs" onClick={cancelEdit}>
+                                      <X className="h-3 w-3" /> Cancel
+                                    </Button>
+                                  </>
+                                : <Button size="sm" variant="outline" className="h-7 px-2 gap-1 text-xs" onClick={() => startEdit(draft)}>
+                                    <Pencil className="h-3 w-3" /> Edit
+                                  </Button>
+                              }
+                              {!isEditing && (
+                                <Button size="sm" variant="outline" className="h-7 px-2 gap-1 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+                                  disabled={deletingId === draft.id} onClick={() => handleDelete(draft.id)}>
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                        {isEditing && (
+                          <TableRow>
+                            <TableCell colSpan={5} className="bg-muted/40 pb-4">
+                              <ScheduledEditPanel
+                                draftId={draft.id}
+                                hook={editHook}
+                                body={editBody}
+                                rewritingId={rewritingId}
+                                onHookChange={setEditHook}
+                                onBodyChange={setEditBody}
+                                onRewrite={handleRewrite}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </React.Fragment>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           </section>
         )}
 
@@ -381,5 +467,60 @@ function DraftCard({
         )}
       </CardContent>
     </Card>
+  )
+}
+
+// ─── ScheduledEditPanel (inline table row expansion) ─────────────────────────
+
+function ScheduledEditPanel({
+  draftId, hook, body, rewritingId, onHookChange, onBodyChange, onRewrite,
+}: {
+  draftId: string
+  hook: string
+  body: string
+  rewritingId: string | null
+  onHookChange: (v: string) => void
+  onBodyChange: (v: string) => void
+  onRewrite: (id: string, instruction: string) => void
+}) {
+  const [aiPrompt, setAiPrompt] = useState("")
+  return (
+    <div className="flex flex-col gap-3 pt-1">
+      {/* AI prompt bar */}
+      <div className="flex gap-2 p-3 rounded-lg bg-background border">
+        <input
+          type="text"
+          placeholder='Tell AI what to change — e.g. "make it shorter" or "lead with the quote about AI costs"'
+          className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+          value={aiPrompt}
+          onChange={e => setAiPrompt(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === "Enter" && aiPrompt.trim() && rewritingId !== draftId) {
+              onRewrite(draftId, aiPrompt.trim()); setAiPrompt("")
+            }
+          }}
+        />
+        <Button size="sm" variant="secondary" className="shrink-0 gap-1.5"
+          disabled={!aiPrompt.trim() || rewritingId === draftId}
+          onClick={() => { onRewrite(draftId, aiPrompt.trim()); setAiPrompt("") }}>
+          <Sparkles className={`h-3.5 w-3.5 ${rewritingId === draftId ? "animate-pulse" : ""}`} />
+          {rewritingId === draftId ? "Rewriting..." : "Rewrite"}
+        </Button>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-muted-foreground">Twitter</label>
+          <textarea className="w-full rounded-md border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+            rows={4} value={hook} onChange={e => onHookChange(e.target.value)} />
+          <p className="text-xs text-muted-foreground text-right">{hook.length} chars</p>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-muted-foreground">LinkedIn</label>
+          <textarea className="w-full rounded-md border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+            rows={4} value={body} onChange={e => onBodyChange(e.target.value)} />
+          <p className="text-xs text-muted-foreground text-right">{body.length} chars</p>
+        </div>
+      </div>
+    </div>
   )
 }
