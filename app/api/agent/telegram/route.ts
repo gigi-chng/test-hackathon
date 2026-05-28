@@ -52,7 +52,6 @@ export async function POST(req: NextRequest) {
     })
     if (next) {
       await sendMsg(`Next draft:\n\n─────────────────────\nTWITTER:\n\n${next.hook}\n\n─────────────────────\nLINKEDIN:\n\n${next.body}\n─────────────────────\n\nReply approve, approve twitter, approve linkedin, or reject.`)
-      await sendQuoteCard(next.id)
     } else {
       await sendMsg("No more pending drafts.")
     }

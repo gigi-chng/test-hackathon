@@ -32,6 +32,7 @@ type Draft = {
   partnerCitation: string
   status: string
   createdAt: Date
+  scheduledAt: Date | null
   videoId: string | null
 }
 
@@ -220,8 +221,9 @@ export default function AgentPage() {
                     <Badge variant={
                       draft.status === "published" ? "default" :
                       draft.status === "pending" ? "secondary" :
-                      draft.status === "rejected" ? "destructive" : "outline"
-                    }>
+                      draft.status === "rejected" ? "destructive" :
+                      draft.status === "scheduled" ? "outline" : "outline"
+                    } className={draft.status === "scheduled" ? "border-blue-400 text-blue-600" : ""}>
                       {draft.status}
                     </Badge>
                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -234,6 +236,7 @@ export default function AgentPage() {
                   <p className="text-xs text-muted-foreground">
                     Drawing on <strong>{PARTNER_NAMES[draft.partner] || draft.partner}</strong>
                     {draft.videoId && " · video attached"}
+                    {draft.status === "scheduled" && draft.scheduledAt && ` · scheduled ${new Date(draft.scheduledAt).toLocaleString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} PT`}
                   </p>
                 </div>
               ))}

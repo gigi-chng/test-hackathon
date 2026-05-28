@@ -93,31 +93,70 @@ async function scoreTrend(trendEmbedding: number[]): Promise<{
 
   if (allContent.length === 0) return null
 
-  let best = { score: 0, partner: "", citation: "", sourceUrl: "" }
+  // Step 1: Find the best-matching partner across all content types
+  let bestScore = 0
+  let bestPartner = ""
 
   for (const item of allContent) {
     if (!item.embedding || item.embedding.length === 0) continue
     const score = cosineSimilarity(trendEmbedding, item.embedding)
-    if (score > best.score) {
-      // Strip email template headers (navigation + soft-hyphen spacers) before slicing
+    if (score > bestScore) {
+      bestScore = score
+      bestPartner = item.partner
+    }
+  }
+
+  if (bestScore <= 0.4 || !bestPartner) return null
+
+  // Step 2: Find the best-matching TWEET from that partner for the citation.
+  // Tweets are actual words the investor wrote — safe to quote verbatim.
+  // Newsletter/blog content is full articles that would be out-of-context when sliced.
+  let bestTweetScore = 0
+  let bestTweetCitation = ""
+  let bestTweetUrl = ""
+
+  for (const item of allContent) {
+    if (item.partner !== bestPartner) continue
+    if (item.sourceType !== "tweet") continue
+    if (!item.embedding || item.embedding.length === 0) continue
+    const score = cosineSimilarity(trendEmbedding, item.embedding)
+    if (score > bestTweetScore) {
+      const citationText = item.content.replace(/https?:\/\/\S+/g, "").replace(/\s+/g, " ").trim()
+      if (isReplyStyleCitation(citationText)) continue
+      bestTweetScore = score
+      bestTweetCitation = citationText
+      bestTweetUrl = item.sourceUrl || ""
+    }
+  }
+
+  // Step 3: Use tweet citation if found; fall back to best non-reply content from that partner
+  if (bestTweetCitation) {
+    return { score: bestScore, partner: bestPartner, citation: bestTweetCitation, sourceUrl: bestTweetUrl }
+  }
+
+  // Fallback: use the best-scoring non-tweet content from that partner (but skip quote card in this case)
+  let fallbackCitation = ""
+  let fallbackUrl = ""
+  let fallbackContentScore = 0
+
+  for (const item of allContent) {
+    if (item.partner !== bestPartner) continue
+    if (!item.embedding || item.embedding.length === 0) continue
+    const score = cosineSimilarity(trendEmbedding, item.embedding)
+    if (score > fallbackContentScore) {
       const lastSoftHyphen = item.content.lastIndexOf('\u00ad')
       const cleanedContent = lastSoftHyphen > 0 && lastSoftHyphen < item.content.length - 20
         ? item.content.slice(lastSoftHyphen + 1).trim()
         : item.content.trim()
-      // Strip URLs from citation text
       const citationText = cleanedContent.replace(/https?:\/\/\S+/g, "").replace(/\s+/g, " ").trim().slice(0, 500)
-      // Skip citations that are tweet replies or too short to stand alone
       if (isReplyStyleCitation(citationText)) continue
-      best = {
-        score,
-        partner: item.partner,
-        citation: citationText,
-        sourceUrl: item.sourceUrl || "",
-      }
+      fallbackContentScore = score
+      fallbackCitation = citationText
+      fallbackUrl = item.sourceUrl || ""
     }
   }
 
-  return best.score > 0.4 ? best : null
+  return { score: bestScore, partner: bestPartner, citation: fallbackCitation, sourceUrl: fallbackUrl }
 }
 
 // ─── Check for duplicate drafts ───────────────────────────────────────────────
@@ -457,21 +496,24 @@ async function sendTelegramApproval(draft: {
     }),
   })
 
-  // Send quote card preview image (use ?id= so it pulls partnerCitation from DB)
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://slow-hackathon-xi.vercel.app"
-  const quoteCardUrl = `${appUrl}/api/quote-card?id=${draft.id}`
-  const photoRes = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      photo: quoteCardUrl,
-      caption: "Quote card preview (attached to LinkedIn post)",
-    }),
-  })
-  if (!photoRes.ok) {
-    const err = await photoRes.text()
-    console.error("Telegram sendPhoto failed:", err, "URL:", quoteCardUrl)
+  // Only send a quote card if the citation is tweet-length (actual direct quote, not an article excerpt)
+  // Tweets are ≤280 chars; newsletter/blog fallback citations can be up to 500 chars and are out-of-context
+  if (draft.partnerCitation && draft.partnerCitation.length >= 60 && draft.partnerCitation.length <= 280) {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://slow-hackathon-xi.vercel.app"
+    const quoteCardUrl = `${appUrl}/api/quote-card?id=${draft.id}`
+    const photoRes = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        photo: quoteCardUrl,
+        caption: "Quote card preview (attached to LinkedIn post)",
+      }),
+    })
+    if (!photoRes.ok) {
+      const err = await photoRes.text()
+      console.error("Telegram sendPhoto failed:", err, "URL:", quoteCardUrl)
+    }
   }
 }
 
@@ -581,4 +623,195 @@ export async function runAgentPipeline(): Promise<{ drafted: number; skipped: nu
   })
 
   return { drafted: 1, skipped }
+}
+
+// ─── Generate video post draft ───────────────────────────────────────────────
+
+async function generateVideoPostDraft(
+  video: { title: string; transcript: string; topics: string[] },
+  partner: string
+): Promise<{ hook: string; body: string; citation: string }> {
+  const partnerNames: Record<string, string> = {
+    sam: "Sam Lessin", will: "Will Quist", yoni: "Yoni Rechtman", megan: "Megan Lightcap",
+  }
+  const partnerHandles: Record<string, string> = {
+    sam: "@lessin", will: "@wquist", yoni: "@yrechtman", megan: "@mmlightcap",
+  }
+  const name = partnerNames[partner] || partner
+  const firstName = name.split(" ")[0]
+  const handle = partnerHandles[partner] || ""
+
+  const voiceSamples = await prisma.partnerContent.findMany({
+    where: { partner, sourceType: "tweet" },
+    orderBy: { createdAt: "desc" },
+    take: 5,
+    select: { content: true },
+  })
+  const voiceExamples = voiceSamples.map((s, i) => `${i + 1}. "${s.content}"`).join("\n")
+
+  const pastFeedback = await prisma.postDraft.findMany({
+    where: { feedback: { not: null } },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+    select: { feedback: true },
+  })
+  const feedbackSection = pastFeedback.length > 0
+    ? `\nPast feedback to incorporate:\n${pastFeedback.map((f, i) => `${i + 1}. ${f.feedback}`).join("\n")}\n`
+    : ""
+
+  const response = await anthropic.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 1800,
+    messages: [{
+      role: "user",
+      content: `You are ghostwriting social posts for Slow Ventures to promote a video clip featuring ${name}.
+
+The post's job is to tease a SPECIFIC insight or moment from the clip so followers click to watch. You must reference the actual content of the transcript — a real quote, a specific argument, a named company, a number, or a concrete moment. Do NOT write a generic description of what the video is "about."
+
+Here are recent things ${firstName} has actually posted. Match this voice exactly — sentence structure, length, word choice:
+${voiceExamples}
+${feedbackSection}
+VIDEO TITLE: "${video.title}"
+TRANSCRIPT:
+${video.transcript.slice(0, 3000)}
+
+Write TWO versions — Twitter and LinkedIn — that tease the sharpest, most specific insight from this transcript.
+
+TWITTER (under 220 characters, not counting the handle appended separately):
+- Find the single most quotable, surprising, or counterintuitive line in the transcript and build the post around it
+- Write it in ${firstName}'s voice as if they're pointing their audience to this moment
+- Reference something specific — a named company, a claim, a number, a framing — not "we discussed X"
+- No questions, no em dashes, no hashtags, no emojis, no corporate language
+- Shorter is better
+
+LINKEDIN (600-900 characters):
+- Line 1: Sharp hook — the specific insight from the video that makes someone stop. Name the company/person/number.
+- Lines 2-4: Expand the reasoning. Show why this specific point matters — the mechanism, the implication, the thing most people miss. Grounded in what was actually said in the transcript.
+- Final line: Confident declarative. No questions.
+- No em dashes, no hashtags, no bullet points
+
+Return ONLY valid JSON:
+{ "twitter": "...", "linkedin": "...", "citation": "exact quote or key line from transcript that the post is built around" }`,
+    }],
+  })
+
+  const text = response.content[0]
+  if (text.type !== "text") throw new Error("No text response")
+  const raw = text.text.trim().replace(/^```json\n?/, "").replace(/\n?```$/, "")
+  const parsed = JSON.parse(raw)
+  const strip = (t: string) => t.replace(/—/g, "-").replace(/–/g, "-")
+
+  return {
+    hook: strip(`${parsed.twitter}\n\n${handle}`),
+    body: strip(parsed.linkedin),
+    citation: parsed.citation || video.title,
+  }
+}
+
+// ─── Schedule video queue ─────────────────────────────────────────────────────
+
+export async function scheduleVideoQueue(): Promise<{
+  scheduled: number
+  slots: { title: string; partner: string; scheduledAt: string }[]
+  message?: string
+}> {
+  // 1. Get all unposted videos (not already in an approved/published/scheduled draft)
+  const [allVideos, usedDrafts] = await Promise.all([
+    prisma.videoLibrary.findMany({
+      select: { id: true, partner: true, title: true, topics: true, transcript: true, embedding: true },
+    }),
+    prisma.postDraft.findMany({
+      where: { status: { in: ["approved", "published", "scheduled"] }, videoId: { not: null } },
+      select: { videoId: true },
+    }),
+  ])
+
+  const usedVideoIds = new Set(usedDrafts.map(d => d.videoId!))
+  const unposted = allVideos.filter(v => !usedVideoIds.has(v.id) && v.embedding && v.embedding.length > 0 && v.transcript)
+
+  if (unposted.length === 0) return { scheduled: 0, slots: [], message: "No unposted videos with transcripts found — add transcripts to videos in the library first" }
+
+  // 2. Get recent partner content (30 days), fall back to latest 100 if sparse
+  const thirtyDaysAgo = new Date()
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+  let recentContent = await prisma.partnerContent.findMany({
+    where: { createdAt: { gte: thirtyDaysAgo } },
+    select: { partner: true, content: true, sourceUrl: true, embedding: true },
+  })
+
+  if (recentContent.length < 20) {
+    recentContent = await prisma.partnerContent.findMany({
+      select: { partner: true, content: true, sourceUrl: true, embedding: true },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    })
+  }
+
+  if (recentContent.length === 0) return { scheduled: 0, slots: [], message: "No partner content in knowledge base — run Sync All Partners first" }
+
+  // 3. Score each unposted video against recent partner content
+  type Match = { videoId: string; videoTitle: string; videoTopics: string[]; videoTranscript: string; partner: string; score: number; citationUrl: string }
+  const allMatches: Match[] = []
+
+  for (const video of unposted) {
+    let bestScore = 0, bestPartner = "", bestCitationUrl = ""
+
+    for (const item of recentContent) {
+      if (!item.embedding || item.embedding.length === 0) continue
+      const score = cosineSimilarity(video.embedding, item.embedding)
+      if (score > bestScore) {
+        const cleaned = item.content.replace(/https?:\/\/\S+/g, "").replace(/\s+/g, " ").trim()
+        if (cleaned.length < 60) continue
+        bestScore = score
+        bestPartner = item.partner
+        bestCitationUrl = item.sourceUrl || ""
+      }
+    }
+
+    if (bestScore > 0.25 && bestPartner) {
+      allMatches.push({
+        videoId: video.id,
+        videoTitle: video.title,
+        videoTopics: video.topics,
+        videoTranscript: video.transcript!,
+        partner: bestPartner,
+        score: bestScore,
+        citationUrl: bestCitationUrl,
+      })
+    }
+  }
+
+  allMatches.sort((a, b) => b.score - a.score)
+  const top = allMatches.slice(0, 7)
+
+  if (top.length === 0) return { scheduled: 0, slots: [], message: "No videos matched recent partner content (try syncing the knowledge base)" }
+
+  const results: { title: string; partner: string }[] = []
+
+  // 5. Generate drafts from transcript and save as pending (no scheduledAt yet)
+  for (const match of top) {
+    const { hook, body, citation } = await generateVideoPostDraft(
+      { title: match.videoTitle, transcript: match.videoTranscript, topics: match.videoTopics },
+      match.partner
+    )
+
+    await prisma.postDraft.create({
+      data: {
+        partner: match.partner,
+        partnerCitation: citation,
+        hook,
+        body,
+        platform: "both",
+        videoId: match.videoId,
+        status: "pending",
+        source: "video",
+        partnerSourceUrl: match.citationUrl || null,
+      },
+    })
+
+    results.push({ title: match.videoTitle, partner: match.partner })
+  }
+
+  return { scheduled: results.length, slots: results.map(r => ({ ...r, scheduledAt: "" })) }
 }
