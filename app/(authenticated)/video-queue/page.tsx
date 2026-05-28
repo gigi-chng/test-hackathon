@@ -184,23 +184,25 @@ export default function VideoQueuePage() {
         </div>
 
         {/* Pending review */}
-        {pending.length > 0 && (
-          <section className="flex flex-col gap-3">
-            <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Awaiting Review · {pending.length}</h2>
-            {pending.map(draft => <DraftCard key={draft.id} draft={draft} showApprove {...cardProps} />)}
-          </section>
-        )}
+        <section className="flex flex-col gap-3">
+          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Awaiting Review · {pending.length}</h2>
+          {pending.length === 0
+            ? <p className="text-sm text-muted-foreground">No drafts awaiting review.</p>
+            : pending.map(draft => <DraftCard key={draft.id} draft={draft} showApprove {...cardProps} />)
+          }
+        </section>
 
         {/* Approved / Scheduled — table view */}
-        {scheduled.length > 0 && (
-          <section className="flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Approved · {scheduled.length}</h2>
-              <Button variant="ghost" size="sm" onClick={() => { loadDrafts(); loadVideos() }}>
-                <RefreshCw className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-            <div className="rounded-lg border overflow-hidden">
+        <section className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Approved · {scheduled.length}</h2>
+            <Button variant="ghost" size="sm" onClick={() => { loadDrafts(); loadVideos() }}>
+              <RefreshCw className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+          {scheduled.length === 0
+            ? <p className="text-sm text-muted-foreground">No approved drafts yet. Approve a draft above to schedule it.</p>
+            : <div className="rounded-lg border overflow-hidden">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -283,9 +285,8 @@ export default function VideoQueuePage() {
                   })}
                 </TableBody>
               </Table>
-            </div>
-          </section>
-        )}
+            </div>}
+        </section>
 
         {/* Video library */}
         {videos.length > 0 && (
