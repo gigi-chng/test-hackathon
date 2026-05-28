@@ -49,22 +49,72 @@ export async function generateFromVideo(
       input.match(/[?&]id=([a-zA-Z0-9_-]{25,})/)
     const fileId = fileIdMatch?.[1] ?? null
 
-    if (fileId) {
-      const video = await prisma.videoLibrary.findFirst({
-        where: { storageUrl: { contains: fileId } },
-        select: { title: true, transcript: true },
+    if (!fileId) throw new Error("Could not extract a file ID from that Drive link. Try pasting the transcript directly.")
+
+    // Check if we already have a transcript in the DB
+    const video = await prisma.videoLibrary.findFirst({
+      where: { storageUrl: { contains: fileId } },
+      select: { id: true, title: true, transcript: true },
+    })
+
+    if (video?.transcript) {
+      content = video.transcript
+      videoTitle = video.title
+    } else {
+      // Auto-transcribe via OpenAI Whisper
+      const downloadUrl = `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=t`
+      const fileRes = await fetch(downloadUrl)
+
+      if (!fileRes.ok) {
+        throw new Error("Could not download this Drive file. Make sure it is shared publicly (Anyone with the link). Alternatively, paste the transcript directly.")
+      }
+
+      const contentType = fileRes.headers.get("content-type") ?? ""
+      const isVideo = contentType.startsWith("video/") || contentType.startsWith("audio/") ||
+        /\.(mp4|mov|avi|mkv|webm|m4v|mp3|m4a|wav)$/i.test(fileRes.url)
+
+      if (!isVideo && contentType.includes("text/html")) {
+        throw new Error("Drive returned an HTML page instead of the video — the file is likely not shared publicly. Set sharing to 'Anyone with the link', or paste the transcript directly.")
+      }
+
+      // Check file size from Content-Length header (Whisper limit is 25MB)
+      const contentLength = fileRes.headers.get("content-length")
+      const sizeBytes = contentLength ? parseInt(contentLength) : null
+      const MAX_BYTES = 24 * 1024 * 1024 // 24MB
+
+      if (sizeBytes && sizeBytes > MAX_BYTES) {
+        throw new Error(`This video is ${Math.round(sizeBytes / 1024 / 1024)}MB — too large for auto-transcription (limit is 24MB). Please paste the transcript text directly instead.`)
+      }
+
+      const arrayBuffer = await fileRes.arrayBuffer()
+      const buffer = Buffer.from(arrayBuffer)
+
+      if (buffer.byteLength > MAX_BYTES) {
+        throw new Error(`This video is ${Math.round(buffer.byteLength / 1024 / 1024)}MB — too large for auto-transcription (limit is 24MB). Please paste the transcript text directly instead.`)
+      }
+
+      // Transcribe with Whisper
+      const OpenAI = (await import("openai")).default
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+      const ext = contentType.includes("mp4") ? "mp4" : contentType.includes("webm") ? "webm" : contentType.includes("mov") ? "mov" : "mp4"
+      const file = new File([buffer], `video.${ext}`, { type: contentType || "video/mp4" })
+
+      const transcription = await openai.audio.transcriptions.create({
+        model: "whisper-1",
+        file,
       })
 
-      if (video?.transcript) {
-        content = video.transcript
-        videoTitle = video.title
-      } else {
-        content = input
-        videoTitle = "Video (no transcript found)"
+      content = transcription.text
+      videoTitle = video?.title ?? "Video"
+
+      // Save transcript back to DB if the video exists in the library
+      if (video?.id) {
+        await prisma.videoLibrary.update({
+          where: { id: video.id },
+          data: { transcript: content },
+        })
       }
-    } else {
-      content = input
-      videoTitle = "Video (no transcript found)"
     }
   }
 
@@ -244,7 +294,12 @@ Return ONLY valid JSON:
   if (responseText.type !== "text") throw new Error("No text response from Claude")
 
   const raw = responseText.text.trim().replace(/^```json\n?/, "").replace(/\n?```$/, "")
-  const parsed = JSON.parse(raw)
+  let parsed: { twitter: string; linkedin: string; citation?: string }
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    throw new Error("Draft generation failed — the AI returned an unexpected format. Try again or paste the transcript as plain text.")
+  }
 
   const strip = (t: string) => t.replace(/—/g, "-").replace(/–/g, "-")
 
