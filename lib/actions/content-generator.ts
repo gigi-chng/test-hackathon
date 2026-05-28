@@ -97,13 +97,16 @@ export async function generateFromVideo(
   let videoTitle = ""
 
   if (input.includes("drive.google.com")) {
-    // Extract file ID from Drive URL
+    // Extract file ID — handles all Drive URL formats
+    const cleanInput = input.trim()
     const fileIdMatch =
-      input.match(/\/d\/([a-zA-Z0-9_-]{25,})/) ||
-      input.match(/[?&]id=([a-zA-Z0-9_-]{25,})/)
+      cleanInput.match(/\/d\/([a-zA-Z0-9_-]+)/) ||       // /file/d/ID/view
+      cleanInput.match(/[?&]id=([a-zA-Z0-9_-]+)/) ||     // ?id=ID or &id=ID
+      cleanInput.match(/\/folders\/([a-zA-Z0-9_-]+)/) ||  // /folders/ID
+      cleanInput.match(/\/open\?id=([a-zA-Z0-9_-]+)/)    // /open?id=ID
     const fileId = fileIdMatch?.[1] ?? null
 
-    if (!fileId) throw new Error("Could not extract a file ID from that Drive link. Try pasting the transcript directly.")
+    if (!fileId) throw new Error(`Could not extract a file ID from: "${cleanInput.slice(0, 80)}". Paste the transcript text directly instead.`)
 
     // Check if we already have a transcript in the DB
     const video = await prisma.videoLibrary.findFirst({
