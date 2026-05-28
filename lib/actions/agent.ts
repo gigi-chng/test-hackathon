@@ -4,6 +4,19 @@ import { prisma } from "@/lib/db/prisma"
 import { runAgentPipeline, generateVideoDraftsFromTrends as runGenerateVideoDrafts } from "@/lib/actions/trends"
 import { syncDriveFolder as runDriveSync } from "@/lib/actions/drive-sync"
 
+export async function getSetting(key: string): Promise<string | null> {
+  const row = await prisma.appSetting.findUnique({ where: { key } })
+  return row?.value ?? null
+}
+
+export async function saveSetting(key: string, value: string): Promise<void> {
+  await prisma.appSetting.upsert({
+    where: { key },
+    update: { value },
+    create: { key, value },
+  })
+}
+
 export async function syncDriveFolder() {
   return runDriveSync()
 }

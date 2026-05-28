@@ -67,11 +67,18 @@ async function listFolderFiles(folderId: string, apiKey: string, folderName = ""
 }
 
 export async function syncDriveFolder(): Promise<{ added: number; skipped: number; message?: string }> {
-  const apiKey = process.env.GOOGLE_API_KEY
+  // API key can come from env OR from the DB (set via in-app settings)
+  const { prisma: db } = await import("@/lib/db/prisma")
+  const dbApiKey = await db.appSetting.findUnique({ where: { key: "GOOGLE_API_KEY" } })
+
+  const apiKey = process.env.GOOGLE_API_KEY || dbApiKey?.value
   const folderId = process.env.DRIVE_VIDEO_FOLDER_ID
 
-  if (!apiKey || !folderId) {
-    return { added: 0, skipped: 0, message: "Add GOOGLE_API_KEY and DRIVE_VIDEO_FOLDER_ID to your environment variables" }
+  if (!apiKey) {
+    return { added: 0, skipped: 0, message: "MISSING_API_KEY" }
+  }
+  if (!folderId) {
+    return { added: 0, skipped: 0, message: "Add DRIVE_VIDEO_FOLDER_ID to your environment variables" }
   }
 
   const [driveFiles, existing] = await Promise.all([

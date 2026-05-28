@@ -111,6 +111,14 @@ model TrendSignal {
   @@map("trend_signals")
 }
 
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("app_settings")
+}
+
 model PostDraft {
   id              String    @id @default(cuid())
   trendSignalId   String?

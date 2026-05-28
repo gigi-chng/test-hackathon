@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import {
   generateVideoDraftsFromTrends, getVideoLibraryStatus, getVideoDrafts,
   updateDraft, deleteDraft, rewriteDraftWithAI, syncDriveFolder,
+  getSetting, saveSetting,
 } from "@/lib/actions/agent"
 import { TrendingUp, Video, Pencil, Trash2, Check, X, Sparkles, FolderSync, Twitter, Linkedin } from "lucide-react"
 
@@ -40,6 +41,9 @@ export default function VideoQueuePage() {
   const [generateMessage, setGenerateMessage] = useState<string | null>(null)
   const [syncMessage, setSyncMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [showApiKeyInput, setShowApiKeyInput] = useState(false)
+  const [apiKeyInput, setApiKeyInput] = useState("")
+  const [savingApiKey, setSavingApiKey] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editHook, setEditHook] = useState("")
   const [editBody, setEditBody] = useState("")
@@ -56,10 +60,26 @@ export default function VideoQueuePage() {
     setSyncing(true); setSyncMessage(null); setError(null)
     try {
       const res = await syncDriveFolder()
-      setSyncMessage(res.message ?? `${res.added} new video${res.added !== 1 ? "s" : ""} added · ${res.skipped} already in library`)
-      await loadVideos()
+      if (res.message === "MISSING_API_KEY") {
+        setShowApiKeyInput(true)
+      } else {
+        setSyncMessage(res.message ?? `${res.added} new video${res.added !== 1 ? "s" : ""} added · ${res.skipped} already in library`)
+        await loadVideos()
+      }
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
     finally { setSyncing(false) }
+  }
+
+  async function handleSaveApiKey() {
+    if (!apiKeyInput.trim()) return
+    setSavingApiKey(true)
+    try {
+      await saveSetting("GOOGLE_API_KEY", apiKeyInput.trim())
+      setShowApiKeyInput(false)
+      setApiKeyInput("")
+      // Retry sync now that the key is saved
+      await handleSync()
+    } finally { setSavingApiKey(false) }
   }
 
   async function handleGenerate() {
@@ -143,6 +163,35 @@ export default function VideoQueuePage() {
 
         {syncMessage && <p className="text-sm text-muted-foreground">{syncMessage}</p>}
         {generateMessage && <p className="text-sm text-muted-foreground">{generateMessage}</p>}
+
+        {/* Google API Key setup — shown when key is missing */}
+        {showApiKeyInput && (
+          <div className="rounded-lg border bg-muted/30 p-4 flex flex-col gap-3">
+            <div>
+              <p className="text-sm font-medium mb-0.5">Google Drive API Key needed</p>
+              <p className="text-xs text-muted-foreground">
+                Get a free key in 2 min:{" "}
+                <span className="font-mono text-xs">console.cloud.google.com</span>{" "}
+                → APIs &amp; Services → Credentials → Create API Key → enable Drive API.
+                Paste it below — saved once, works forever.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="password"
+                placeholder="AIza..."
+                className="flex-1 rounded-md border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring font-mono"
+                value={apiKeyInput}
+                onChange={e => setApiKeyInput(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") handleSaveApiKey() }}
+              />
+              <Button size="sm" disabled={!apiKeyInput.trim() || savingApiKey} onClick={handleSaveApiKey}>
+                {savingApiKey ? "Saving..." : "Save & Sync"}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setShowApiKeyInput(false)}>Cancel</Button>
+            </div>
+          </div>
+        )}
 
         {/* Drafts */}
         <section className="flex flex-col gap-3">
