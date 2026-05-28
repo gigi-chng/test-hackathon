@@ -19,6 +19,60 @@ const PARTNER_HANDLES: Record<string, string> = {
   megan: "@mmlightcap",
 }
 
+async function transcribeFromDrive(fileId: string): Promise<string> {
+  const audioUrl = `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=t`
+
+  // ── AssemblyAI: handles any file size, no download needed ───────────────────
+  const assemblyKey = process.env.ASSEMBLYAI_API_KEY
+  if (assemblyKey) {
+    const createRes = await fetch("https://api.assemblyai.com/v2/transcript", {
+      method: "POST",
+      headers: { authorization: assemblyKey, "content-type": "application/json" },
+      body: JSON.stringify({ audio_url: audioUrl }),
+    })
+    if (!createRes.ok) throw new Error(`AssemblyAI error: ${await createRes.text()}`)
+    const { id } = await createRes.json()
+
+    // Poll until complete (max ~4.5 min — within Vercel's 300s function limit)
+    const deadline = Date.now() + 270_000
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 5000))
+      const poll = await fetch(`https://api.assemblyai.com/v2/transcript/${id}`, {
+        headers: { authorization: assemblyKey },
+      })
+      const result = await poll.json()
+      if (result.status === "completed") return result.text as string
+      if (result.status === "error") throw new Error(`Transcription failed: ${result.error}`)
+    }
+    throw new Error("Transcription timed out. Try again for long videos, or paste the transcript directly.")
+  }
+
+  // ── Whisper fallback: download + send (files up to 24MB) ────────────────────
+  const fileRes = await fetch(audioUrl)
+  if (!fileRes.ok) throw new Error("Could not download the Drive file. Make sure it is shared publicly (Anyone with the link).")
+
+  const contentType = fileRes.headers.get("content-type") ?? ""
+  if (contentType.includes("text/html")) {
+    throw new Error("Drive returned an HTML page — the file is not shared publicly. Set sharing to 'Anyone with the link' and try again.")
+  }
+
+  const buffer = Buffer.from(await fileRes.arrayBuffer())
+  const MAX_BYTES = 24 * 1024 * 1024
+  if (buffer.byteLength > MAX_BYTES) {
+    throw new Error(
+      `This video is ${Math.round(buffer.byteLength / 1024 / 1024)}MB — too large for Whisper (24MB limit). ` +
+      `Add ASSEMBLYAI_API_KEY to your environment variables to transcribe any size, or paste the transcript directly.`
+    )
+  }
+
+  const OpenAI = (await import("openai")).default
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  const ext = contentType.includes("webm") ? "webm" : contentType.includes("mov") ? "mov" : "mp4"
+  const file = new File([buffer], `video.${ext}`, { type: contentType || "video/mp4" })
+  const transcription = await openai.audio.transcriptions.create({ model: "whisper-1", file })
+  return transcription.text
+}
+
 type TweetResult = {
   id: string
   text: string
@@ -61,51 +115,8 @@ export async function generateFromVideo(
       content = video.transcript
       videoTitle = video.title
     } else {
-      // Auto-transcribe via OpenAI Whisper
-      const downloadUrl = `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=t`
-      const fileRes = await fetch(downloadUrl)
-
-      if (!fileRes.ok) {
-        throw new Error("Could not download this Drive file. Make sure it is shared publicly (Anyone with the link). Alternatively, paste the transcript directly.")
-      }
-
-      const contentType = fileRes.headers.get("content-type") ?? ""
-      const isVideo = contentType.startsWith("video/") || contentType.startsWith("audio/") ||
-        /\.(mp4|mov|avi|mkv|webm|m4v|mp3|m4a|wav)$/i.test(fileRes.url)
-
-      if (!isVideo && contentType.includes("text/html")) {
-        throw new Error("Drive returned an HTML page instead of the video — the file is likely not shared publicly. Set sharing to 'Anyone with the link', or paste the transcript directly.")
-      }
-
-      // Check file size from Content-Length header (Whisper limit is 25MB)
-      const contentLength = fileRes.headers.get("content-length")
-      const sizeBytes = contentLength ? parseInt(contentLength) : null
-      const MAX_BYTES = 24 * 1024 * 1024 // 24MB
-
-      if (sizeBytes && sizeBytes > MAX_BYTES) {
-        throw new Error(`This video is ${Math.round(sizeBytes / 1024 / 1024)}MB — too large for auto-transcription (limit is 24MB). Please paste the transcript text directly instead.`)
-      }
-
-      const arrayBuffer = await fileRes.arrayBuffer()
-      const buffer = Buffer.from(arrayBuffer)
-
-      if (buffer.byteLength > MAX_BYTES) {
-        throw new Error(`This video is ${Math.round(buffer.byteLength / 1024 / 1024)}MB — too large for auto-transcription (limit is 24MB). Please paste the transcript text directly instead.`)
-      }
-
-      // Transcribe with Whisper
-      const OpenAI = (await import("openai")).default
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-
-      const ext = contentType.includes("mp4") ? "mp4" : contentType.includes("webm") ? "webm" : contentType.includes("mov") ? "mov" : "mp4"
-      const file = new File([buffer], `video.${ext}`, { type: contentType || "video/mp4" })
-
-      const transcription = await openai.audio.transcriptions.create({
-        model: "whisper-1",
-        file,
-      })
-
-      content = transcription.text
+      // Auto-transcribe — AssemblyAI (any size, URL-based) or Whisper (small files)
+      content = await transcribeFromDrive(fileId)
       videoTitle = video?.title ?? "Video"
 
       // Save transcript back to DB if the video exists in the library
