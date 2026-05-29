@@ -28,7 +28,7 @@ async function transcribeFromDrive(fileId: string): Promise<string> {
     const createRes = await fetch("https://api.assemblyai.com/v2/transcript", {
       method: "POST",
       headers: { authorization: assemblyKey, "content-type": "application/json" },
-      body: JSON.stringify({ audio_url: audioUrl }),
+      body: JSON.stringify({ audio_url: audioUrl, speech_model: "universal-2" }),
     })
     if (!createRes.ok) throw new Error(`AssemblyAI error: ${await createRes.text()}`)
     const { id } = await createRes.json()
