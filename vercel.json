@@ -2,15 +2,11 @@
   "crons": [
     {
       "path": "/api/agent/cron",
-      "schedule": "0 14 * * 1-5"
+      "schedule": "0 18 * * 1,2,5"
     },
     {
       "path": "/api/agent/cron",
-      "schedule": "0 21 * * 1-5"
-    },
-    {
-      "path": "/api/agent/scheduler",
-      "schedule": "0 14 * * *"
+      "schedule": "0 22 * * 1,2,5"
     }
   ],
   "functions": {
