@@ -14,6 +14,7 @@ export default function Home() {
               <Link href="/podcast-tools" className="text-muted-foreground hover:text-foreground">Podcast Tools</Link>
               <Link href="/comic-generator" className="text-muted-foreground hover:text-foreground">Comic Generator</Link>
               <Link href="/agent" className="text-muted-foreground hover:text-foreground">Agent</Link>
+              <Link href="/video-queue" className="text-muted-foreground hover:text-foreground">Content Generator</Link>
             </div>
             <AuthButton />
           </div>
