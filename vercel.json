@@ -1,14 +1,4 @@
 {
-  "crons": [
-    {
-      "path": "/api/agent/cron",
-      "schedule": "0 18 * * 1,2,5"
-    },
-    {
-      "path": "/api/agent/cron",
-      "schedule": "0 22 * * 1,2,5"
-    }
-  ],
   "functions": {
     "app/api/agent/cron/route.ts": { "maxDuration": 300 },
     "app/api/agent/scheduler/route.ts": { "maxDuration": 300 },
