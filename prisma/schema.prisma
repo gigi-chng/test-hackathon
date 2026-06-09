@@ -119,6 +119,24 @@ model AppSetting {
   @@map("app_settings")
 }
 
+model MediaAppearance {
+  id              String    @id @default(cuid())
+  partner         String    // "sam" | "will" | "yoni" | "megan"
+  type            String    // "podcast" | "press" | "panel" | "newsletter" | "video" | "other"
+  show            String
+  title           String
+  url             String
+  publishedAt     DateTime?
+  transcript      String?
+  topics          String[]
+  notes           String?
+  status          String    @default("ready") // "processing" | "ready" | "error"
+  processingJobId String?
+  createdAt       DateTime  @default(now())
+
+  @@map("media_appearances")
+}
+
 model PostDraft {
   id              String    @id @default(cuid())
   trendSignalId   String?
