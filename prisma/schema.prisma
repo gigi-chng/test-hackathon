@@ -5,6 +5,7 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -64,6 +65,7 @@ model PartnerContent {
   title       String?
   content     String
   embedding   Float[]
+  tags        String[]  @default([])
   publishedAt DateTime?
   createdAt   DateTime  @default(now())
 
@@ -71,13 +73,16 @@ model PartnerContent {
 }
 
 model PartnerProfile {
-  id           String   @id @default(cuid())
-  partner      String   @unique
-  displayName  String
-  twitterHandle String?
-  topics       String[]
-  voiceSamples String[]
-  updatedAt    DateTime @updatedAt
+  id          String    @id @default(cuid())
+  partner     String    @unique
+  toneOfVoice String    @default("")
+  pointOfView String    @default("")
+  themes      String[]
+  styleNotes  String    @default("")
+  rawProfile  String    @default("") // full JSON for agent use
+  generatedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime  @default(now())
 
   @@map("partner_profiles")
 }
@@ -134,6 +139,65 @@ model MediaAppearance {
   createdAt       DateTime  @default(now())
 
   @@map("media_appearances")
+}
+
+model TrackerProject {
+  id          String          @id @default(cuid())
+  vertical    String          // "slow" | "slow-creator" | "sam"
+  name        String
+  description String?
+  status      String          @default("active") // active | paused | completed
+  order       Int             @default(0)
+  createdAt   DateTime        @default(now())
+
+  kpis        TrackerKPI[]
+  weeklyGoals TrackerGoal[]
+  updates     TrackerUpdate[]
+
+  @@map("tracker_projects")
+}
+
+model TrackerKPI {
+  id        String         @id @default(cuid())
+  projectId String
+  name      String
+  unit      String?
+  target    Float?
+  current   Float?
+  stage     String         @default("live") // "pre-live" | "live"
+  updatedAt DateTime       @updatedAt
+  project   TrackerProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("tracker_kpis")
+}
+
+model TrackerGoal {
+  id          String         @id @default(cuid())
+  projectId   String
+  weekOf      DateTime       // Monday of the week
+  text        String
+  type        String         @default("deliverable") // "deliverable" | "metric"
+  workType    String         @default("sprint")      // "sprint" | "maintenance"
+  priority    String         @default("p2")          // "p1" | "p2" | "p3"
+  rankOrder   Int            @default(0)
+  targetValue Float?
+  actualValue Float?
+  completed   Boolean        @default(false)
+  notes       String?
+  createdAt   DateTime       @default(now())
+  project     TrackerProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("tracker_goals")
+}
+
+model TrackerUpdate {
+  id        String         @id @default(cuid())
+  projectId String
+  text      String
+  createdAt DateTime       @default(now())
+  project   TrackerProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("tracker_updates")
 }
 
 model PostDraft {

@@ -16,6 +16,9 @@ export default function Home() {
               <Link href="/agent" className="text-muted-foreground hover:text-foreground">Agent</Link>
               <Link href="/video-queue" className="text-muted-foreground hover:text-foreground">Content Generator</Link>
               <Link href="/media-tracker" className="text-muted-foreground hover:text-foreground">Media Tracker</Link>
+              <Link href="/tracker" className="text-muted-foreground hover:text-foreground">Tracker</Link>
+              <Link href="/content-library" className="text-muted-foreground hover:text-foreground">Content Library</Link>
+              <Link href="/partner-profiles" className="text-muted-foreground hover:text-foreground">Partner Profiles</Link>
             </div>
             <AuthButton />
           </div>

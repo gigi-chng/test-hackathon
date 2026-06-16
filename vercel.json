@@ -4,6 +4,20 @@
     "app/api/agent/scheduler/route.ts": { "maxDuration": 300 },
     "app/api/agent/telegram/route.ts": { "maxDuration": 300 },
     "app/api/agent/approve/route.ts": { "maxDuration": 300 },
-    "app/api/quote-card/route.tsx": { "maxDuration": 30 }
-  }
+    "app/api/quote-card/route.tsx": { "maxDuration": 30 },
+    "app/api/cron/sync-twitter/route.ts": { "maxDuration": 60 },
+    "app/api/cron/generate-profiles/route.ts": { "maxDuration": 300 },
+    "app/api/content/route.ts": { "maxDuration": 30 },
+    "app/api/profiles/route.ts": { "maxDuration": 30 }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/sync-twitter",
+      "schedule": "0 15 * * 1"
+    },
+    {
+      "path": "/api/cron/generate-profiles",
+      "schedule": "0 13 * * 5"
+    }
+  ]
 }
