@@ -313,6 +313,8 @@ function ProjectCard({
   const tasks = project.weeklyGoals.filter(g => isSameWeek(new Date(g.weekOf), currentWeekMonday))
   const done = tasks.filter(g => g.completed).length
   const pct = tasks.length ? Math.round((done / tasks.length) * 100) : null
+  // If no tasks this week, treat as passive for display (doesn't change DB)
+  const effectiveStatus = tasks.length === 0 ? "passive" : project.status
 
   async function handleAddUpdate() {
     const text = updateInput.trim()
@@ -374,10 +376,10 @@ function ProjectCard({
               <h3 className="font-semibold text-sm leading-tight">{project.name}</h3>
               <button
                 onClick={e => { e.stopPropagation(); updateProjectStatus(project.id, STATUS_CYCLE[project.status] ?? "active") }}
-                className={cn("text-[10px] px-1.5 py-0.5 rounded-full border capitalize font-medium transition-opacity hover:opacity-70", STATUS_STYLES[project.status])}
-                title="Click to cycle status"
+                className={cn("text-[10px] px-1.5 py-0.5 rounded-full border capitalize font-medium transition-opacity hover:opacity-70", STATUS_STYLES[effectiveStatus])}
+                title={tasks.length === 0 ? "No tasks this week — showing as passive" : "Click to cycle status"}
               >
-                {project.status}
+                {effectiveStatus}
               </button>
             </div>
 
@@ -700,10 +702,16 @@ function ProjectCard({
 
 // ─── Weekly View ──────────────────────────────────────────────────────────────
 
-function sortProjects(projects: Project[]) {
+function sortProjects(projects: Project[], currentWeekMonday?: Date) {
   return [...projects].sort((a, b) => {
-    if (a.status === "passive" && b.status !== "passive") return 1
-    if (a.status !== "passive" && b.status === "passive") return -1
+    const aPassive = a.status === "passive" || (currentWeekMonday
+      ? a.weeklyGoals.filter(g => isSameWeek(new Date(g.weekOf), currentWeekMonday)).length === 0
+      : false)
+    const bPassive = b.status === "passive" || (currentWeekMonday
+      ? b.weeklyGoals.filter(g => isSameWeek(new Date(g.weekOf), currentWeekMonday)).length === 0
+      : false)
+    if (aPassive && !bPassive) return 1
+    if (!aPassive && bPassive) return -1
     return a.order - b.order
   })
 }
@@ -722,7 +730,7 @@ function WeeklyView({ projects, weekOffset, setWeekOffset }: {
     if (!draggingProject || !dragOverProject || draggingProject === dragOverProject) {
       setDraggingProject(null); setDragOverProject(null); return
     }
-    const vp = sortProjects(projects.filter(p => p.vertical === verticalKey))
+    const vp = sortProjects(projects.filter(p => p.vertical === verticalKey), currentWeekMonday)
     const fromIdx = vp.findIndex(p => p.id === draggingProject)
     const toIdx = vp.findIndex(p => p.id === dragOverProject)
     if (fromIdx === -1 || toIdx === -1) { setDraggingProject(null); setDragOverProject(null); return }
@@ -737,7 +745,7 @@ function WeeklyView({ projects, weekOffset, setWeekOffset }: {
   const rankBaseMap = new Map<string, number>()
   let globalIdx = 0
   VERTICALS.forEach(v => {
-    sortProjects(projects.filter(p => p.vertical === v.key)).forEach(p => {
+    sortProjects(projects.filter(p => p.vertical === v.key), currentWeekMonday).forEach(p => {
       rankBaseMap.set(p.id, globalIdx * 1000)
       globalIdx++
     })
@@ -778,7 +786,7 @@ function WeeklyView({ projects, weekOffset, setWeekOffset }: {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {VERTICALS.map(vertical => {
-          const vProjects = sortProjects(projects.filter(p => p.vertical === vertical.key))
+          const vProjects = sortProjects(projects.filter(p => p.vertical === vertical.key), currentWeekMonday)
           return (
             <div key={vertical.key} className="space-y-3">
               {/* Vertical label */}
