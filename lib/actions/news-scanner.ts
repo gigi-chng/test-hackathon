@@ -205,6 +205,42 @@ async function fetchTwitter(themes: string[]): Promise<Article[]> {
   return articles
 }
 
+// ─── Sent URL tracking (dedup across days) ────────────────────────────────────
+
+const SENT_URLS_KEY = "media_monitor_sent_urls"
+const SENT_TTL_DAYS = 7
+
+async function loadSentUrls(): Promise<Set<string>> {
+  try {
+    const row = await prisma.appSetting.findUnique({ where: { key: SENT_URLS_KEY } })
+    if (!row) return new Set()
+    const parsed: { url: string; sentAt: string }[] = JSON.parse(row.value)
+    const cutoff = Date.now() - SENT_TTL_DAYS * 86400000
+    return new Set(parsed.filter(r => new Date(r.sentAt).getTime() > cutoff).map(r => r.url))
+  } catch {
+    return new Set()
+  }
+}
+
+async function saveSentUrls(newUrls: string[], existing: Set<string>) {
+  try {
+    const cutoff = Date.now() - SENT_TTL_DAYS * 86400000
+    const now = new Date().toISOString()
+    // Load current stored records (to preserve sentAt timestamps)
+    const row = await prisma.appSetting.findUnique({ where: { key: SENT_URLS_KEY } })
+    const stored: { url: string; sentAt: string }[] = row ? JSON.parse(row.value) : []
+    // Keep recent existing + add new ones
+    const kept = stored.filter(r => new Date(r.sentAt).getTime() > cutoff)
+    const added = newUrls.filter(u => !existing.has(u)).map(u => ({ url: u, sentAt: now }))
+    const merged = [...kept, ...added]
+    await prisma.appSetting.upsert({
+      where: { key: SENT_URLS_KEY },
+      update: { value: JSON.stringify(merged) },
+      create: { key: SENT_URLS_KEY, value: JSON.stringify(merged) },
+    })
+  } catch {}
+}
+
 // ─── GPT matching ─────────────────────────────────────────────────────────────
 
 async function matchToPartners(
@@ -227,9 +263,14 @@ async function matchToPartners(
     messages: [
       {
         role: "system",
-        content: `Match news articles to partners based on their interests. Only include genuinely relevant matches (7+/10). Each article can match multiple partners.
+        content: `Match news articles to partners based on their interests. Apply these rules strictly:
+1. Only include articles scoring 8+/10 relevance — be selective, not generous
+2. Pick at most 3 articles per partner
+3. Ensure the 3 articles cover DIFFERENT themes — no two articles on the same topic
+4. Each article can match multiple partners if genuinely relevant to both
+
 Return JSON: { "matches": { "sam": [0, 3], "will": [1], "yoni": [2, 4], "megan": [5] } }
-Use the array index of the article. Omit partners with no matches.`,
+Use the array index. Omit partners with no strong matches.`,
       },
       {
         role: "user",
@@ -304,7 +345,7 @@ function buildEmail(matches: Record<string, Article[]>): string {
 
   return `
 <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:620px;margin:0 auto;color:#111;padding:24px 16px;">
-  <h2 style="margin:0 0 4px;font-size:20px;font-weight:700;">Daily Signal Scan</h2>
+  <h2 style="margin:0 0 4px;font-size:20px;font-weight:700;">Media Monitor</h2>
   <p style="margin:0 0 28px;font-size:13px;color:#999;">${date} · Hacker News · Reddit · NewsAPI · X</p>
   ${sections}
   <p style="margin-top:32px;font-size:11px;color:#ccc;border-top:1px solid #eee;padding-top:16px;">
@@ -342,11 +383,14 @@ export async function scanNews(): Promise<{ matched: number; sent: boolean; sour
     fetchTwitter(allThemes),
   ])
 
-  // Deduplicate across sources by URL
+  // Load URLs already sent in the last 7 days
+  const sentUrls = await loadSentUrls()
+
+  // Deduplicate across sources and filter previously sent
   const seen = new Set<string>()
   const allArticles: Article[] = []
   for (const a of [...hnArticles, ...redditArticles, ...newsArticles, ...twitterArticles]) {
-    if (!seen.has(a.url)) {
+    if (!seen.has(a.url) && !sentUrls.has(a.url)) {
       seen.add(a.url)
       allArticles.push(a)
     }
@@ -378,6 +422,10 @@ export async function scanNews(): Promise<{ matched: number; sent: boolean; sour
       subject: `Media Monitor — ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}`,
       html,
     }).catch(() => {})
+
+    // Record sent URLs so they don't appear again for 7 days
+    const sentArticleUrls = Object.values(matches).flat().map(a => a.url)
+    await saveSentUrls(sentArticleUrls, sentUrls)
   }
 
   return { matched: totalMatched, sent: !!process.env.REPORT_EMAIL, sources }
