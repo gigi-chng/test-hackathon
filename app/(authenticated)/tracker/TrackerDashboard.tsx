@@ -741,6 +741,8 @@ function WeeklyView({ projects, weekOffset, setWeekOffset }: {
     setDraggingProject(null); setDragOverProject(null)
   }
 
+  const currentWeekMonday = getMondayOf(addWeeks(new Date(), weekOffset))
+
   // Build a global rank base map: vertical order × 10000 + project position × 1000
   const rankBaseMap = new Map<string, number>()
   let globalIdx = 0
@@ -750,8 +752,6 @@ function WeeklyView({ projects, weekOffset, setWeekOffset }: {
       globalIdx++
     })
   })
-
-  const currentWeekMonday = getMondayOf(addWeeks(new Date(), weekOffset))
   const weekLabel = weekOffset === 0 ? "This Week"
     : weekOffset === 1 ? "Next Week"
     : weekOffset === -1 ? "Last Week"
