@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { addContent, scrapeUrl, deleteContent, detectSpeakers, extractSpeakerContent } from "@/lib/actions/content-library"
+import { addContent, scrapeUrl, deleteContent, detectSpeakers, extractSpeakerContent, backfillTags } from "@/lib/actions/content-library"
 import type { SpeakerDetectionResult } from "@/lib/actions/content-library"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -81,6 +81,8 @@ export default function ContentLibrary({
   const [partner,      setPartner]      = useState("")
   const [sourceType,   setSourceType]   = useState("")
   const [isSaving,     setIsSaving]     = useState(false)
+  const [isBackfilling, setIsBackfilling] = useState(false)
+  const [backfillResult, setBackfillResult] = useState<{ updated: number; skipped: number } | null>(null)
 
   // Speaker detection state
   const [isDetecting,      setIsDetecting]      = useState(false)
@@ -202,6 +204,24 @@ export default function ContentLibrary({
               {initialContent.length} items · auto-syncs X posts every Monday
             </p>
           </div>
+          <div className="flex items-center gap-2">
+            {backfillResult && (
+              <span className="text-[11px] text-emerald-500">✓ Tagged {backfillResult.updated} items</span>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={isBackfilling}
+              onClick={async () => {
+                setIsBackfilling(true)
+                setBackfillResult(null)
+                const result = await backfillTags()
+                setBackfillResult(result)
+                setIsBackfilling(false)
+              }}
+            >
+              {isBackfilling ? <><Loader2 size={13} className="animate-spin mr-1.5" />Tagging...</> : "Tag untagged"}
+            </Button>
           <Dialog open={open} onOpenChange={o => { setOpen(o); if (!o) resetForm() }}>
             <DialogTrigger asChild>
               <Button size="sm" className="gap-1.5">
@@ -376,6 +396,7 @@ export default function ContentLibrary({
               </div>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
 
         {/* Filters */}

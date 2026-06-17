@@ -8,7 +8,8 @@
     "app/api/cron/sync-twitter/route.ts": { "maxDuration": 60 },
     "app/api/cron/generate-profiles/route.ts": { "maxDuration": 300 },
     "app/api/content/route.ts": { "maxDuration": 30 },
-    "app/api/profiles/route.ts": { "maxDuration": 30 }
+    "app/api/profiles/route.ts": { "maxDuration": 30 },
+    "app/api/cron/scan-news/route.ts": { "maxDuration": 300 }
   },
   "crons": [
     {
@@ -18,6 +19,10 @@
     {
       "path": "/api/cron/generate-profiles",
       "schedule": "0 13 * * 5"
+    },
+    {
+      "path": "/api/cron/scan-news",
+      "schedule": "0 16 * * *"
     }
   ]
 }

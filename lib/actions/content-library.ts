@@ -370,3 +370,30 @@ export async function deleteContent(id: string) {
   await prisma.partnerContent.delete({ where: { id } })
   revalidatePath("/content-library")
 }
+
+export async function backfillTags(): Promise<{ updated: number; skipped: number }> {
+  const untagged = await prisma.partnerContent.findMany({
+    where: { tags: { isEmpty: true } },
+    select: { id: true, content: true },
+  })
+
+  let updated = 0
+  let skipped = 0
+
+  for (const item of untagged) {
+    try {
+      const tags = await generateTags(item.content)
+      if (tags.length === 0) { skipped++; continue }
+      await prisma.partnerContent.update({
+        where: { id: item.id },
+        data: { tags },
+      })
+      updated++
+    } catch {
+      skipped++
+    }
+  }
+
+  revalidatePath("/content-library")
+  return { updated, skipped }
+}
