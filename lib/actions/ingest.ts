@@ -291,14 +291,8 @@ export async function ingestPartnerBlog(partner: Partner): Promise<{ ingested: n
 
   await prisma.partnerProfile.upsert({
     where: { partner },
-    update: { updatedAt: new Date() },
-    create: {
-      partner,
-      displayName: config.displayName,
-      twitterHandle: config.twitterHandle,
-      topics: [],
-      voiceSamples: [],
-    },
+    update: {},
+    create: { partner },
   })
 
   return { ingested, skipped }

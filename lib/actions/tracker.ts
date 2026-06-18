@@ -36,6 +36,7 @@ export async function upsertKPI(data: {
   unit?: string
   target?: number
   current?: number
+  stage?: string
 }) {
   if (data.id) {
     await prisma.trackerKPI.update({

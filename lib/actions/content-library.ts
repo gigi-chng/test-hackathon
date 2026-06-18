@@ -8,7 +8,7 @@ import { revalidatePath } from "next/cache"
 import { PARTNERS } from "@/lib/partners"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-const resend = new Resend(process.env.RESEND_API_KEY)
+const getResend = () => new Resend(process.env.RESEND_API_KEY)
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -70,7 +70,7 @@ async function notifyZapier(item: {
 async function sendEmailReport(subject: string, html: string) {
   const to = process.env.REPORT_EMAIL
   if (!to || !process.env.RESEND_API_KEY) return
-  await resend.emails.send({
+  await getResend().emails.send({
     from: "Content Library <onboarding@resend.dev>",
     to,
     subject,

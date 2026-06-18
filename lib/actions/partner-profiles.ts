@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache"
 import { PARTNERS } from "@/lib/partners"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-const resend = new Resend(process.env.RESEND_API_KEY)
+const getResend = () => new Resend(process.env.RESEND_API_KEY)
 
 const PROFILE_PROMPT = `You are analyzing a person's published content to build a detailed tone of voice and POV profile for use in AI content generation.
 
@@ -101,7 +101,7 @@ export async function generatePartnerProfiles(): Promise<{
   // Send email report
   const to = process.env.REPORT_EMAIL
   if (to && process.env.RESEND_API_KEY && updated.length > 0) {
-    await resend.emails.send({
+    await getResend().emails.send({
       from: "Content Library <onboarding@resend.dev>",
       to,
       subject: `Partner profiles updated — ${updated.length} profiles regenerated`,

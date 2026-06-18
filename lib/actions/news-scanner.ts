@@ -7,7 +7,7 @@ import { prisma } from "@/lib/db/prisma"
 import { PARTNERS } from "@/lib/partners"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-const resend = new Resend(process.env.RESEND_API_KEY)
+const getResend = () => new Resend(process.env.RESEND_API_KEY)
 
 // Credible outlets only
 const CREDIBLE_DOMAINS = [
@@ -416,7 +416,7 @@ export async function scanNews(): Promise<{ matched: number; sent: boolean; sour
   const to = process.env.REPORT_EMAIL
   if (to && process.env.RESEND_API_KEY) {
     const html = buildEmail(matches)
-    await resend.emails.send({
+    await getResend().emails.send({
       from: "Media Monitor <onboarding@resend.dev>",
       to,
       subject: `Media Monitor — ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}`,
