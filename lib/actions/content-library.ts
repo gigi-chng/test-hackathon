@@ -184,6 +184,29 @@ Return the extracted text as clean continuous prose — just their words, nothin
   return res.choices[0].message.content ?? transcript
 }
 
+// ─── Press Quote Extraction ───────────────────────────────────────────────────
+
+export async function extractPressQuotes(
+  articleText: string,
+  partnerName: string
+): Promise<{ quotes: string; found: boolean }> {
+  const res = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [
+      {
+        role: "system",
+        content: `You are extracting direct quotes from a press article.
+Find every quote directly attributed to "${partnerName}" — these are their spoken or written words, usually in quotation marks with attribution like "said ${partnerName}" or "${partnerName} said".
+Return ONLY the quotes themselves as clean prose, preserving the exact wording. Do not include journalist commentary, paraphrasing, or context sentences — only the verbatim quoted text.
+If no quotes are found, return an empty string.`,
+      },
+      { role: "user", content: articleText.slice(0, 30000) },
+    ],
+  })
+  const quotes = (res.choices[0].message.content ?? "").trim()
+  return { quotes, found: quotes.length > 20 }
+}
+
 // ─── Add Content ──────────────────────────────────────────────────────────────
 
 export async function addContent(data: {
@@ -206,6 +229,7 @@ export async function addContent(data: {
       content: data.content,
       embedding,
       tags,
+      manual: true,
       publishedAt: data.publishedAt ? new Date(data.publishedAt) : null,
     },
   })
@@ -353,6 +377,7 @@ export async function getContent(filters?: {
       title: true,
       content: true,
       tags: true,
+      manual: true,
       publishedAt: true,
       createdAt: true,
     },

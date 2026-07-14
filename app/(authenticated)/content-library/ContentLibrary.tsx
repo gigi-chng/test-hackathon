@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { addContent, scrapeUrl, deleteContent, detectSpeakers, extractSpeakerContent, backfillTags } from "@/lib/actions/content-library"
+import { addContent, scrapeUrl, deleteContent, detectSpeakers, extractSpeakerContent, extractPressQuotes, backfillTags } from "@/lib/actions/content-library"
 import type { SpeakerDetectionResult } from "@/lib/actions/content-library"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
-import { Plus, Trash2, ExternalLink, Loader2, Search, Twitter, Mic, BookOpen, Users, CheckCircle2 } from "lucide-react"
+import { Plus, Trash2, ExternalLink, Loader2, Search, Twitter, Mic, BookOpen, Users, CheckCircle2, Lock, Newspaper, Mail } from "lucide-react"
 
 type ContentItem = {
   id: string
@@ -33,6 +33,7 @@ type ContentItem = {
   title: string | null
   content: string
   tags: string[]
+  manual: boolean
   publishedAt: Date | null
   createdAt: Date
 }
@@ -45,9 +46,11 @@ const PARTNERS = [
 ]
 
 const SOURCE_TYPES = [
-  { key: "tweet",   label: "X Post",   icon: Twitter,  color: "bg-sky-500/10 text-sky-400 border-sky-500/20" },
-  { key: "blog",    label: "Blog",     icon: BookOpen, color: "bg-amber-500/10 text-amber-400 border-amber-500/20" },
-  { key: "podcast", label: "Podcast",  icon: Mic,      color: "bg-purple-500/10 text-purple-400 border-purple-500/20" },
+  { key: "tweet",      label: "X Post",      icon: Twitter,   color: "bg-sky-500/10 text-sky-400 border-sky-500/20" },
+  { key: "blog",       label: "Blog",        icon: BookOpen,  color: "bg-amber-500/10 text-amber-400 border-amber-500/20" },
+  { key: "podcast",    label: "Podcast",     icon: Mic,       color: "bg-purple-500/10 text-purple-400 border-purple-500/20" },
+  { key: "press",      label: "Press",       icon: Newspaper, color: "bg-orange-500/10 text-orange-400 border-orange-500/20" },
+  { key: "newsletter", label: "Newsletter",  icon: Mail,      color: "bg-teal-500/10 text-teal-400 border-teal-500/20" },
 ]
 
 const PARTNER_MAP = Object.fromEntries(PARTNERS.map(p => [p.key, p]))
@@ -91,6 +94,11 @@ export default function ContentLibrary({
   const [extractedContent, setExtractedContent]  = useState<string | null>(null)
   const [confirmedSpeaker, setConfirmedSpeaker]  = useState<string | null>(null)
 
+  // Press quote extraction state
+  const [isExtractingQuotes, setIsExtractingQuotes] = useState(false)
+  const [pressQuotes,        setPressQuotes]         = useState<string | null>(null)
+  const [noQuotesFound,      setNoQuotesFound]       = useState(false)
+
   const filtered = useMemo(() => {
     return initialContent
       .filter(c => filterPartner    === "all" || c.partner    === filterPartner)
@@ -126,6 +134,8 @@ export default function ContentLibrary({
     setSpeakerResult(null)
     setExtractedContent(null)
     setConfirmedSpeaker(null)
+    setPressQuotes(null)
+    setNoQuotesFound(false)
   }
 
   async function handleDetectSpeakers() {
@@ -158,8 +168,25 @@ export default function ContentLibrary({
     setIsExtracting(false)
   }
 
-  // The content to save: extracted (filtered) if podcast + speaker detected, otherwise raw
+  async function handleExtractPressQuotes() {
+    const rawText = scrapeResult?.text ?? manualText
+    if (!rawText || !partner) return
+    const partnerLabel = PARTNERS.find(p => p.key === partner)?.label ?? partner
+    setIsExtractingQuotes(true)
+    setPressQuotes(null)
+    setNoQuotesFound(false)
+    const result = await extractPressQuotes(rawText, partnerLabel)
+    setIsExtractingQuotes(false)
+    if (result.found) {
+      setPressQuotes(result.quotes)
+    } else {
+      setNoQuotesFound(true)
+    }
+  }
+
+  // The content to save: press quotes if extracted, podcast speaker lines if extracted, otherwise raw
   const contentToSave = (() => {
+    if (sourceType === "press" && pressQuotes) return pressQuotes
     if (sourceType === "podcast" && extractedContent) return extractedContent
     return scrapeResult?.text ?? manualText
   })()
@@ -187,6 +214,7 @@ export default function ContentLibrary({
 
   const rawTextAvailable = !!(scrapeResult?.text || manualText.trim())
   const showSpeakerDetect = sourceType === "podcast" && partner && rawTextAvailable && !extractedContent
+  const showPressExtract  = sourceType === "press"   && partner && rawTextAvailable && !pressQuotes && !noQuotesFound
 
   const pillBase = "px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer border"
   const pillActive = "bg-background shadow-sm text-foreground border-border/60"
@@ -351,6 +379,51 @@ export default function ContentLibrary({
                   </div>
                 )}
 
+                {/* Press quote extraction */}
+                {showPressExtract && (
+                  <div className="rounded-lg border border-orange-500/20 bg-orange-500/5 p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Newspaper size={13} className="text-orange-400" />
+                      <p className="text-xs text-orange-300 font-medium">Press article detected — extract partner's quotes only</p>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Pull only the verbatim quotes attributed to {PARTNERS.find(p => p.key === partner)?.label}, removing journalist commentary.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-xs border-orange-500/30 hover:bg-orange-500/10"
+                      onClick={handleExtractPressQuotes}
+                      disabled={isExtractingQuotes}
+                    >
+                      {isExtractingQuotes ? <><Loader2 size={12} className="animate-spin mr-1.5" /> Extracting quotes...</> : "Extract Quotes"}
+                    </Button>
+                  </div>
+                )}
+
+                {/* Press quotes result */}
+                {pressQuotes && (
+                  <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle2 size={13} className="text-emerald-400" />
+                      <p className="text-xs text-emerald-400 font-medium">Quotes extracted</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground line-clamp-4">{pressQuotes.slice(0, 400)}…</p>
+                    <button onClick={() => { setPressQuotes(null); setNoQuotesFound(false) }} className="text-[10px] text-muted-foreground/50 hover:text-muted-foreground underline">
+                      Re-extract
+                    </button>
+                  </div>
+                )}
+
+                {noQuotesFound && (
+                  <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+                    <p className="text-xs text-amber-400">No direct quotes found for this partner. The full article will be saved instead.</p>
+                    <button onClick={() => setNoQuotesFound(false)} className="text-[10px] text-muted-foreground/50 hover:text-muted-foreground underline mt-1">
+                      Try again
+                    </button>
+                  </div>
+                )}
+
                 {/* Extracted content confirmation */}
                 {extractedContent && (
                   <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 space-y-1">
@@ -387,10 +460,15 @@ export default function ContentLibrary({
                   {isSaving ? <><Loader2 size={14} className="animate-spin mr-2" /> Saving & tagging...</> : "Save"}
                 </Button>
 
-                {/* Skip detection nudge for podcasts */}
+                {/* Skip nudges */}
                 {showSpeakerDetect && (
                   <p className="text-[10px] text-muted-foreground/40 text-center -mt-2">
                     Or save without speaker filtering — all voices will be included.
+                  </p>
+                )}
+                {showPressExtract && (
+                  <p className="text-[10px] text-muted-foreground/40 text-center -mt-2">
+                    Or save without filtering — full article text will be included.
                   </p>
                 )}
               </div>
@@ -467,6 +545,11 @@ export default function ContentLibrary({
                       {s && (
                         <span className={cn("text-[10px] px-2 py-0.5 rounded-full border font-medium flex items-center gap-1", s.color)}>
                           {Icon && <Icon size={9} />}{s.label}
+                        </span>
+                      )}
+                      {item.manual && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full border font-medium flex items-center gap-1 bg-zinc-500/10 text-zinc-400 border-zinc-500/20">
+                          <Lock size={8} />manual
                         </span>
                       )}
                       <span className="text-[10px] text-muted-foreground/50 ml-auto">
