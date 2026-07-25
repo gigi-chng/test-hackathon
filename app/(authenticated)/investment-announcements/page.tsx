@@ -19,7 +19,7 @@ export default function InvestmentAnnouncementsPage() {
   const [generating, setGenerating] = useState(false)
   const [posting, setPosting] = useState(false)
   const [scheduling, setScheduling] = useState(false)
-  const [result, setResult] = useState<{ twitter: boolean; linkedin: boolean; linkedinError?: string } | null>(null)
+  const [result, setResult] = useState<{ saved: boolean } | null>(null)
   const [scheduled, setScheduled] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -45,10 +45,10 @@ export default function InvestmentAnnouncementsPage() {
     setError(null)
     setResult(null)
     try {
-      const res = await postAnnouncementNow(twitter, linkedin, platform)
-      setResult(res)
+      await postAnnouncementNow(twitter, linkedin, platform)
+      setResult({ saved: true })
     } catch (e) {
-      setError(`Post failed: ${e instanceof Error ? e.message : String(e)}`)
+      setError(`Failed: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setPosting(false)
     }
@@ -188,9 +188,7 @@ export default function InvestmentAnnouncementsPage() {
                   </Button>
                   {result && (
                     <p className="text-sm mt-3 text-muted-foreground">
-                      {platform !== "linkedin" && (result.twitter ? "✓ Twitter posted" : "✗ Twitter failed")}
-                      {platform === "both" && " · "}
-                      {platform !== "twitter" && (result.linkedin ? "✓ LinkedIn posted" : `✗ LinkedIn failed${result.linkedinError ? `: ${result.linkedinError}` : ""}`)}
+                      ✓ Draft saved for review
                     </p>
                   )}
                 </CardContent>

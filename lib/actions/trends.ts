@@ -435,87 +435,6 @@ async function findMatchingVideo(trendEmbedding: number[]): Promise<{ id: string
   return best ? { id: best.id, title: best.title, partner: best.partner, storageUrl: best.storageUrl } : null
 }
 
-// ─── Send Telegram approval message ──────────────────────────────────────────
-
-async function sendTelegramApproval(draft: {
-  id: string
-  hook: string
-  body: string
-  partner: string
-  partnerCitation: string
-  approvalToken: string
-  video: { id: string; title: string; partner: string; storageUrl: string } | null
-  quoteTweetUrl: string | null
-  trend: { headline: string; source: string }
-}) {
-  const botToken = process.env.TELEGRAM_BOT_TOKEN
-  const chatId = process.env.TELEGRAM_CHAT_ID
-  if (!botToken || !chatId) throw new Error("TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set")
-
-  const partnerNames: Record<string, string> = {
-    sam: "Sam Lessin",
-    will: "Will Quist",
-    yoni: "Yoni Rechtman",
-    megan: "Megan Lightcap",
-  }
-
-  const fullText = [
-    `📣 *Draft ready for approval*`,
-    `_Responding to: ${draft.trend.headline} (${draft.trend.source})_`,
-    ``,
-    `─────────────────────`,
-    `*TWITTER:*`,
-    ``,
-    `${draft.hook}`,
-    ``,
-    `─────────────────────`,
-    `*LINKEDIN:*`,
-    ``,
-    `${draft.body}`,
-    `─────────────────────`,
-    ``,
-    `*Drawing on:* ${partnerNames[draft.partner]}`,
-    `_"${draft.partnerCitation.slice(0, 150)}..."_`,
-    draft.quoteTweetUrl ? `🔁 Will be posted as a quote-tweet: ${draft.quoteTweetUrl}` : `📝 No quote-tweet found — will post standalone`,
-    draft.video
-      ? draft.video.partner === "founder"
-        ? `📎 Clip match (portfolio founder): "${draft.video.title}" — ${draft.video.storageUrl}`
-        : `📎 Clip match: "${draft.video.title}" — ${draft.video.storageUrl}`
-      : "",
-    ``,
-    `Reply *approve* (both), *approve twitter*, *approve linkedin*, *reject*, or *feedback: [note]*`,
-  ].filter(line => line !== undefined && line !== null).join("\n")
-
-  await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text: fullText,
-      parse_mode: "Markdown",
-    }),
-  })
-
-  // Only send a quote card if the citation is tweet-length (actual direct quote, not an article excerpt)
-  // Tweets are ≤280 chars; newsletter/blog fallback citations can be up to 500 chars and are out-of-context
-  if (draft.partnerCitation && draft.partnerCitation.length >= 60 && draft.partnerCitation.length <= 280) {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://slow-hackathon-xi.vercel.app"
-    const quoteCardUrl = `${appUrl}/api/quote-card?id=${draft.id}`
-    const photoRes = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        photo: quoteCardUrl,
-        caption: "Quote card preview (attached to LinkedIn post)",
-      }),
-    })
-    if (!photoRes.ok) {
-      const err = await photoRes.text()
-      console.error("Telegram sendPhoto failed:", err, "URL:", quoteCardUrl)
-    }
-  }
-}
 
 // ─── Main: run the full agent pipeline ───────────────────────────────────────
 
@@ -608,18 +527,6 @@ export async function runAgentPipeline(): Promise<{ drafted: number; skipped: nu
       relevanceScore: match.score,
       status: "drafted",
     },
-  })
-
-  await sendTelegramApproval({
-    id: postDraft.id,
-    hook,
-    body,
-    partner: match.partner,
-    partnerCitation: match.citation,
-    approvalToken: postDraft.approvalToken,
-    video,
-    quoteTweetUrl: quoteTweet?.url ?? null,
-    trend: { headline: article.headline, source: article.source },
   })
 
   return { drafted: 1, skipped }

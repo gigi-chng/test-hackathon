@@ -260,7 +260,7 @@ ${data.sourceUrl ? `<p><strong>Source:</strong> <a href="${data.sourceUrl}">${da
 
 // ─── Twitter Sync ─────────────────────────────────────────────────────────────
 
-export async function syncTwitter(): Promise<{ ingested: number; skipped: number; errors: number }> {
+export async function syncTwitter(onlyPartner?: string): Promise<{ ingested: number; skipped: number; errors: number }> {
   const bearerToken = process.env.TWITTER_BEARER_TOKEN
   if (!bearerToken) throw new Error("TWITTER_BEARER_TOKEN not set")
 
@@ -268,7 +268,11 @@ export async function syncTwitter(): Promise<{ ingested: number; skipped: number
   let skipped = 0
   let errors = 0
 
-  for (const [partner, config] of Object.entries(PARTNERS)) {
+  const partnerEntries = onlyPartner
+    ? Object.entries(PARTNERS).filter(([key]) => key === onlyPartner)
+    : Object.entries(PARTNERS)
+
+  for (const [partner, config] of partnerEntries) {
     try {
       // Find the last saved tweet for this partner to use as since_id
       const lastTweet = await prisma.partnerContent.findFirst({

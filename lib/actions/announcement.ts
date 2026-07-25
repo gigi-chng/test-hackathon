@@ -2,7 +2,6 @@
 
 import Anthropic from "@anthropic-ai/sdk"
 import { prisma } from "@/lib/db/prisma"
-import { publishDraft, sendTelegramMessage } from "@/lib/actions/publish"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -64,8 +63,8 @@ export async function postAnnouncementNow(
   twitter: string,
   linkedin: string,
   platform: "both" | "twitter" | "linkedin"
-): Promise<{ twitter: boolean; linkedin: boolean; linkedinError?: string }> {
-  const draft = await prisma.postDraft.create({
+): Promise<void> {
+  await prisma.postDraft.create({
     data: {
       partner: "slow",
       partnerCitation: "",
@@ -73,20 +72,9 @@ export async function postAnnouncementNow(
       body: linkedin,
       platform,
       source: "announcement",
-      status: "pending",
+      status: "approved",
     },
   })
-
-  const results = await publishDraft(
-    { id: draft.id, hook: twitter, body: linkedin, videoId: null, source: "announcement" },
-    { onlyTwitter: platform === "twitter", onlyLinkedin: platform === "linkedin" }
-  )
-
-  const twitterLine = platform === "linkedin" ? "– Twitter skipped" : (results.twitter ? "✓ Twitter" : "✗ Twitter failed")
-  const linkedinLine = platform === "twitter" ? "– LinkedIn skipped" : (results.linkedin ? "✓ LinkedIn" : `✗ LinkedIn failed: ${results.linkedinError || "unknown"}`)
-  await sendTelegramMessage(`📣 Investment announcement posted.\n${twitterLine}\n${linkedinLine}`)
-
-  return results
 }
 
 export async function scheduleAnnouncement(
@@ -108,11 +96,4 @@ export async function scheduleAnnouncement(
     },
   })
 
-  const when = scheduledAt.toLocaleString("en-US", {
-    timeZone: "America/Los_Angeles",
-    month: "short", day: "numeric",
-    hour: "numeric", minute: "2-digit",
-    timeZoneName: "short",
-  })
-  await sendTelegramMessage(`🗓 Investment announcement scheduled for ${when}.`)
 }

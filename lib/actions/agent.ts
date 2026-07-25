@@ -210,12 +210,6 @@ export async function deleteDraft(id: string) {
   return prisma.postDraft.delete({ where: { id } })
 }
 
-export async function publishNow(id: string) {
-  const { publishDraft } = await import("@/lib/actions/publish")
-  const draft = await prisma.postDraft.findUnique({ where: { id } })
-  if (!draft) throw new Error("Draft not found")
-  return publishDraft(draft)
-}
 
 export async function forceNextVideo(id: string) {
   // Clear any existing forced video first

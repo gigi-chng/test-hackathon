@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db/prisma"
-import { publishDraft } from "@/lib/actions/publish"
 
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token")
@@ -42,28 +41,18 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  // Approve — publish to Twitter + LinkedIn
-  try {
-    const results = await publishDraft(draft)
+  // Approve — mark as approved (no auto-publish)
+  await prisma.postDraft.update({
+    where: { id: draft.id },
+    data: { status: "approved" },
+  })
 
-    return new NextResponse(
-      `<html><body style="font-family:sans-serif;padding:40px;max-width:500px">
-        <h2>Published</h2>
-        <p>${results.twitter ? "✓ Posted to Twitter" : "✗ Twitter failed"}</p>
-        <p>${results.linkedin ? "✓ Posted to LinkedIn" : "✗ LinkedIn failed"}</p>
-        <p style="margin-top:24px;font-size:13px;color:#888;">Post: "${draft.hook}"</p>
-      </body></html>`,
-      { headers: { "Content-Type": "text/html" } }
-    )
-  } catch (e) {
-    console.error("Publish failed:", e)
-    return new NextResponse(
-      `<html><body style="font-family:sans-serif;padding:40px;max-width:500px">
-        <h2>Publish failed</h2>
-        <p>Check server logs for details.</p>
-      </body></html>`,
-      { headers: { "Content-Type": "text/html" } }
-    )
-  }
+  return new NextResponse(
+    `<html><body style="font-family:sans-serif;padding:40px;max-width:500px">
+      <h2>Draft approved</h2>
+      <p>The draft has been marked as approved.</p>
+      <p style="margin-top:24px;font-size:13px;color:#888;">"${draft.hook}"</p>
+    </body></html>`,
+    { headers: { "Content-Type": "text/html" } }
+  )
 }
-
