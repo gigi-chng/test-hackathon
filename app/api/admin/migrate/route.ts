@@ -25,6 +25,8 @@ export async function GET(req: NextRequest) {
     ["post_drafts.videoId",           `ALTER TABLE post_drafts ADD COLUMN IF NOT EXISTS "videoId" TEXT`],
     ["post_drafts.publishedAt",       `ALTER TABLE post_drafts ADD COLUMN IF NOT EXISTS "publishedAt" TIMESTAMP WITH TIME ZONE`],
     ["post_drafts.partnerCitation",   `ALTER TABLE post_drafts ADD COLUMN IF NOT EXISTS "partnerCitation" TEXT NOT NULL DEFAULT ''`],
+    ["partner_profiles.createdAt",    `ALTER TABLE partner_profiles ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()`],
+    ["partner_profiles.updatedAt",    `ALTER TABLE partner_profiles ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()`],
   ]
 
   for (const [name, sql] of migrations) {
