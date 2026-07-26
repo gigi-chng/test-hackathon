@@ -27,6 +27,8 @@ export async function GET(req: NextRequest) {
     ["post_drafts.partnerCitation",   `ALTER TABLE post_drafts ADD COLUMN IF NOT EXISTS "partnerCitation" TEXT NOT NULL DEFAULT ''`],
     ["partner_profiles.createdAt",    `ALTER TABLE partner_profiles ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()`],
     ["partner_profiles.updatedAt",    `ALTER TABLE partner_profiles ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()`],
+    ["partner_profiles.displayName nullable", `ALTER TABLE partner_profiles ALTER COLUMN "displayName" DROP NOT NULL`],
+    ["partner_profiles.displayName default",  `ALTER TABLE partner_profiles ALTER COLUMN "displayName" SET DEFAULT ''`],
   ]
 
   for (const [name, sql] of migrations) {
