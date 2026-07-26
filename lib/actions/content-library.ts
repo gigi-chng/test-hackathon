@@ -338,8 +338,7 @@ export async function syncTwitter(onlyPartner?: string): Promise<{ ingested: num
 
         ingested++
       }
-    } catch (err) {
-      console.error(`[syncTwitter] error for ${partner}:`, err)
+    } catch {
       errors++
     }
   }
