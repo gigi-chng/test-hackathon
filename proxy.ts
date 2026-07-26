@@ -1,6 +1,6 @@
 import { auth } from "@/auth"
 
-const publicRoutes = ["/", "/sign-in", "/sign-up", "/api/auth", "/api/agent/cron", "/api/agent/approve", "/podcast-tools", "/api/quote-card", "/api/cron", "/api/content", "/api/profiles"]
+const publicRoutes = ["/", "/sign-in", "/sign-up", "/api/auth", "/api/agent/cron", "/api/agent/approve", "/podcast-tools", "/api/quote-card", "/api/cron", "/api/content", "/api/profiles", "/api/admin"]
 const ALLOWED_EMAILS = ["gigi@slow.co"]
 
 export default auth((req) => {
