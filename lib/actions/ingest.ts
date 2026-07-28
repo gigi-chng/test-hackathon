@@ -26,83 +26,150 @@ async function alreadyIngested(sourceUrl: string): Promise<boolean> {
   return !!existing
 }
 
-// ─── Generic blog scraper ─────────────────────────────────────────────────────
+// ─── Blog fetching ────────────────────────────────────────────────────────────
 
-async function scrapeBlogIndex(indexUrl: string): Promise<{ title: string; url: string }[]> {
-  const res = await fetch(indexUrl, { next: { revalidate: 0 } })
-  const html = await res.text()
+// Squarespace/beehiiv reject requests that look like a bot, so send a real UA
+const BROWSER_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+
+type BlogPost = { title: string; url: string; publishedAt: Date | null }
+
+async function fetchText(url: string, cookie?: string): Promise<string> {
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": BROWSER_UA,
+      ...(cookie ? { Cookie: cookie } : {}),
+    },
+    next: { revalidate: 0 },
+    signal: AbortSignal.timeout(20000),
+  })
+  if (!res.ok) throw new Error(`${res.status} fetching ${url}`)
+  return res.text()
+}
+
+// Where each platform keeps the post body, most specific selector first
+const ARTICLE_SELECTORS: Record<string, string[]> = {
+  substack: [".available-content", ".body.markup", "article"],
+  beehiiv: ["#content-blocks", ".rendered-post", "article"],
+  wlessin: ["article", "main", ".post-content", ".content", "body"],
+  generic: ["article", "main", ".post-content", ".entry-content", ".content", "body"],
+}
+
+const SOURCE_TYPE: Record<string, string> = {
+  substack: "newsletter",
+  beehiiv: "newsletter",
+  wlessin: "blog",
+  generic: "blog",
+}
+
+function extractArticle(html: string, selectors: string[]): { title: string; content: string } {
+  const $ = cheerio.load(html)
+  const title = $("h1").first().text().trim().replace(/\s+/g, " ")
+
+  $("nav, footer, script, style, header, aside, form, .sidebar, .navigation").remove()
+
+  for (const sel of selectors) {
+    const text = $(sel).text().replace(/\s+/g, " ").trim()
+    if (text.length > 200) return { title, content: text }
+  }
+
+  return { title, content: "" }
+}
+
+// ─── Post listing, one per platform ───────────────────────────────────────────
+
+// Substack's RSS feed truncates most posts, so use the archive API instead
+async function listSubstackPosts(baseUrl: string, limit: number): Promise<BlogPost[]> {
+  const posts: BlogPost[] = []
+  const pageSize = 12
+
+  for (let offset = 0; offset < limit; offset += pageSize) {
+    const raw = await fetchText(`${baseUrl}/api/v1/archive?sort=new&limit=${pageSize}&offset=${offset}`)
+    const batch = JSON.parse(raw) as { title?: string; canonical_url?: string; post_date?: string }[]
+    if (!Array.isArray(batch) || batch.length === 0) break
+
+    for (const post of batch) {
+      if (!post.canonical_url) continue
+      posts.push({
+        title: post.title ?? "",
+        url: post.canonical_url,
+        publishedAt: post.post_date ? new Date(post.post_date) : null,
+      })
+    }
+
+    if (batch.length < pageSize) break
+  }
+
+  return posts.slice(0, limit)
+}
+
+// beehiiv sites (wquist.com, meganlightcap.com) list every post in sitemap.xml, newest first
+async function listBeehiivPosts(baseUrl: string, limit: number): Promise<BlogPost[]> {
+  const xml = await fetchText(`${new URL(baseUrl).origin}/sitemap.xml`)
+  const $ = cheerio.load(xml, { xmlMode: true })
+
+  const posts: BlogPost[] = []
+  $("url").each((_, el) => {
+    const url = $(el).find("loc").text().trim()
+    if (!url.includes("/p/")) return
+    const lastmod = $(el).find("lastmod").text().trim()
+    posts.push({ title: "", url, publishedAt: lastmod ? new Date(lastmod) : null })
+  })
+
+  return posts.slice(0, limit)
+}
+
+// wlessin.com is members-only — logged out, every post link points at /login
+async function listWlessinPosts(indexUrl: string, cookie: string, limit: number): Promise<BlogPost[]> {
+  const html = await fetchText(indexUrl, cookie)
   const $ = cheerio.load(html)
 
-  const posts: { title: string; url: string }[] = []
+  const posts: BlogPost[] = []
+  const seen = new Set<string>()
 
   $("a").each((_, el) => {
-    const href = $(el).attr("href") || ""
-    const text = $(el).text().trim()
-    if (!text || text.length < 10) return
+    const href = $(el).attr("href") ?? ""
+    if (!href.includes("/p/") || href.includes("/login")) return
 
-    let url = href
-    if (href.startsWith("/")) {
-      const base = new URL(indexUrl)
-      url = `${base.origin}${href}`
-    } else if (!href.startsWith("http")) {
+    const url = new URL(href, indexUrl).toString()
+    if (seen.has(url)) return
+    seen.add(url)
+
+    posts.push({ title: $(el).text().trim().replace(/\s+/g, " "), url, publishedAt: null })
+  })
+
+  return posts.slice(0, limit)
+}
+
+// Last resort for sites with no sitemap or feed: every link on the index page
+async function listGenericPosts(indexUrl: string, limit: number): Promise<BlogPost[]> {
+  const html = await fetchText(indexUrl)
+  const $ = cheerio.load(html)
+  const origin = new URL(indexUrl).origin
+
+  const posts: BlogPost[] = []
+  const seen = new Set<string>()
+
+  $("a").each((_, el) => {
+    const href = $(el).attr("href") ?? ""
+    const text = $(el).text().trim().replace(/\s+/g, " ")
+    if (!href || text.length < 10) return
+
+    let url: string
+    try {
+      url = new URL(href, indexUrl).toString()
+    } catch {
       return
     }
 
-    if (
-      url.includes("twitter.com") ||
-      url.includes("linkedin.com") ||
-      url.includes("mailto:") ||
-      url === indexUrl
-    ) return
+    // Stay on the partner's own site and skip the index itself
+    if (!url.startsWith(origin) || url === indexUrl || seen.has(url)) return
+    seen.add(url)
 
-    posts.push({ title: text, url })
+    posts.push({ title: text, url, publishedAt: null })
   })
 
-  const seen = new Set<string>()
-  return posts.filter(p => {
-    if (seen.has(p.url)) return false
-    seen.add(p.url)
-    return true
-  })
-}
-
-async function scrapeArticleContent(url: string): Promise<string> {
-  const res = await fetch(url, { next: { revalidate: 0 } })
-  const html = await res.text()
-  const $ = cheerio.load(html)
-
-  $("nav, footer, script, style, header, aside, .sidebar, .navigation").remove()
-
-  const selectors = ["article", "main", ".post-content", ".entry-content", ".content", "body"]
-  for (const sel of selectors) {
-    const text = $(sel).text().replace(/\s+/g, " ").trim()
-    if (text.length > 200) return text
-  }
-
-  return $("body").text().replace(/\s+/g, " ").trim()
-}
-
-// ─── Substack scraper ─────────────────────────────────────────────────────────
-
-async function scrapeSubstack(baseUrl: string): Promise<{ title: string; url: string; content: string }[]> {
-  const feedUrl = `${baseUrl}/feed`
-  const res = await fetch(feedUrl, { next: { revalidate: 0 } })
-  const xml = await res.text()
-  const $ = cheerio.load(xml, { xmlMode: true })
-
-  const posts: { title: string; url: string; content: string }[] = []
-
-  $("item").each((_, el) => {
-    const title = $(el).find("title").text().trim()
-    const url = $(el).find("link").text().trim() || $(el).find("guid").text().trim()
-    const content = $(el).find("content\\:encoded, description").first().text()
-    const cleaned = cheerio.load(content).text().replace(/\s+/g, " ").trim()
-    if (title && url && cleaned.length > 100) {
-      posts.push({ title, url, content: cleaned })
-    }
-  })
-
-  return posts
+  return posts.slice(0, limit)
 }
 
 // ─── Twitter scraper ──────────────────────────────────────────────────────────
@@ -246,46 +313,69 @@ export async function ingestPartnerLinkedIn(partner: Partner): Promise<{ ingeste
 
 // ─── Ingest a single partner's blog ──────────────────────────────────────────
 
-export async function ingestPartnerBlog(partner: Partner): Promise<{ ingested: number; skipped: number }> {
+export type BlogIngestResult = {
+  ingested: number
+  skipped: number
+  errors: number
+  message?: string
+}
+
+export async function ingestPartnerBlog(partner: Partner, limit = 40): Promise<BlogIngestResult> {
   const config = PARTNERS[partner]
+  const blogType: string = config.blogType
+  const cookie = blogType === "wlessin" ? process.env.WLESSIN_COOKIE : undefined
+
+  let posts: BlogPost[] = []
+
+  if (blogType === "substack" && config.substackUrl) {
+    posts = await listSubstackPosts(config.substackUrl, limit)
+  } else if (blogType === "beehiiv" && config.blogUrl) {
+    posts = await listBeehiivPosts(config.blogUrl, limit)
+  } else if (blogType === "wlessin" && config.blogUrl) {
+    if (!cookie) {
+      return {
+        ingested: 0,
+        skipped: 0,
+        errors: 0,
+        message: "Sam's posts are members-only — set WLESSIN_COOKIE to ingest them",
+      }
+    }
+    posts = await listWlessinPosts(config.blogUrl, cookie, limit)
+  } else if (config.blogUrl) {
+    posts = await listGenericPosts(config.blogUrl, limit)
+  }
+
+  const selectors = ARTICLE_SELECTORS[blogType] ?? ARTICLE_SELECTORS.generic
+  const sourceType = SOURCE_TYPE[blogType] ?? "blog"
+
   let ingested = 0
   let skipped = 0
+  let errors = 0
 
-  if (config.substackUrl) {
-    const posts = await scrapeSubstack(config.substackUrl)
-    for (const post of posts) {
+  for (const post of posts) {
+    try {
       if (await alreadyIngested(post.url)) { skipped++; continue }
-      const embedding = await embed(post.content)
+
+      const html = await fetchText(post.url, cookie)
+      const article = extractArticle(html, selectors)
+      if (article.content.length < 200) { skipped++; continue }
+
+      const embedding = await embed(article.content)
       await prisma.partnerContent.create({
         data: {
           partner,
-          sourceType: "newsletter",
+          sourceType,
           sourceUrl: post.url,
-          title: post.title,
-          content: post.content,
+          title: post.title || article.title || null,
+          content: article.content,
           embedding,
+          publishedAt: post.publishedAt,
         },
       })
       ingested++
-    }
-  } else if (config.blogUrl) {
-    const posts = await scrapeBlogIndex(config.blogUrl)
-    for (const post of posts.slice(0, 30)) {
-      if (await alreadyIngested(post.url)) { skipped++; continue }
-      const content = await scrapeArticleContent(post.url)
-      if (content.length < 100) { skipped++; continue }
-      const embedding = await embed(content)
-      await prisma.partnerContent.create({
-        data: {
-          partner,
-          sourceType: "blog",
-          sourceUrl: post.url,
-          title: post.title,
-          content,
-          embedding,
-        },
-      })
-      ingested++
+    } catch (err) {
+      console.error(`[ingestPartnerBlog] ${partner} ${post.url}:`, err)
+      errors++
     }
   }
 
@@ -295,21 +385,39 @@ export async function ingestPartnerBlog(partner: Partner): Promise<{ ingested: n
     create: { partner },
   })
 
-  return { ingested, skipped }
+  return { ingested, skipped, errors }
 }
 
 // ─── Ingest all partners ──────────────────────────────────────────────────────
 
-export async function ingestAllPartners(): Promise<Record<Partner, { ingested: number; skipped: number }>> {
-  const results = {} as Record<Partner, { ingested: number; skipped: number }>
+export async function ingestAllPartners(): Promise<Record<Partner, { ingested: number; skipped: number; errors: number }>> {
+  const results = {} as Record<Partner, { ingested: number; skipped: number; errors: number }>
+
   for (const partner of Object.keys(PARTNERS) as Partner[]) {
-    const blog = await ingestPartnerBlog(partner)
-    const twitter = await ingestPartnerTwitter(partner)
-    const linkedin = await ingestPartnerLinkedIn(partner)
-    results[partner] = {
-      ingested: blog.ingested + twitter.ingested + linkedin.ingested,
-      skipped: blog.skipped + twitter.skipped + linkedin.skipped,
+    const totals = { ingested: 0, skipped: 0, errors: 0 }
+
+    // One source failing (an expired LinkedIn scraper token, say) must not
+    // take down the rest of the sync
+    const sources: (() => Promise<{ ingested: number; skipped: number; errors?: number }>)[] = [
+      () => ingestPartnerBlog(partner),
+      () => ingestPartnerTwitter(partner),
+      () => ingestPartnerLinkedIn(partner),
+    ]
+
+    for (const run of sources) {
+      try {
+        const result = await run()
+        totals.ingested += result.ingested
+        totals.skipped += result.skipped
+        totals.errors += result.errors ?? 0
+      } catch (err) {
+        console.error(`[ingestAllPartners] ${partner}:`, err)
+        totals.errors++
+      }
     }
+
+    results[partner] = totals
   }
+
   return results
 }

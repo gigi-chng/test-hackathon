@@ -8,7 +8,8 @@
     "app/api/cron/generate-profiles/route.ts": { "maxDuration": 300 },
     "app/api/content/route.ts": { "maxDuration": 30 },
     "app/api/profiles/route.ts": { "maxDuration": 30 },
-    "app/api/cron/scan-news/route.ts": { "maxDuration": 300 }
+    "app/api/cron/scan-news/route.ts": { "maxDuration": 300 },
+    "app/api/cron/ingest-blogs/route.ts": { "maxDuration": 300 }
   },
   "crons": [
     { "path": "/api/cron/sync-twitter?partner=sam",   "schedule": "0 15 * * 1" },
@@ -19,6 +20,10 @@
     { "path": "/api/cron/sync-twitter?partner=will",  "schedule": "30 15 * * 4" },
     { "path": "/api/cron/sync-twitter?partner=yoni",  "schedule": "0 16 * * 4" },
     { "path": "/api/cron/sync-twitter?partner=megan", "schedule": "30 16 * * 4" },
+    {
+      "path": "/api/cron/ingest-blogs",
+      "schedule": "0 14 * * 1"
+    },
     {
       "path": "/api/cron/generate-profiles",
       "schedule": "0 13 * * 5"
