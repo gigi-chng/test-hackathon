@@ -9,7 +9,8 @@
     "app/api/content/route.ts": { "maxDuration": 30 },
     "app/api/profiles/route.ts": { "maxDuration": 30 },
     "app/api/cron/scan-news/route.ts": { "maxDuration": 300 },
-    "app/api/cron/ingest-blogs/route.ts": { "maxDuration": 300 }
+    "app/api/cron/ingest-blogs/route.ts": { "maxDuration": 300 },
+    "app/api/inbound/email/route.ts": { "maxDuration": 60 }
   },
   "crons": [
     { "path": "/api/cron/sync-twitter?partner=sam",   "schedule": "0 15 * * 1" },
