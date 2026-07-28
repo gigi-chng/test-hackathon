@@ -31,11 +31,20 @@ const CANONICAL_URL: Record<Partner, RegExp> = {
   will: /wquist\.com\/p\//i,
 }
 
-function inferPartner(from: string, subject: string): Partner | null {
+// Gmail's auto-forwarding does not always preserve the original sender, so fall
+// back to looking for a partner's own post links in the body
+function inferPartner(from: string, subject: string, html: string | null): Partner | null {
   const haystack = `${from} ${subject}`
   for (const [partner, pattern] of SENDER_PATTERNS) {
     if (pattern.test(haystack)) return partner
   }
+
+  if (html) {
+    for (const [partner, pattern] of Object.entries(CANONICAL_URL) as [Partner, RegExp][]) {
+      if (pattern.test(html)) return partner
+    }
+  }
+
   return null
 }
 
@@ -113,7 +122,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error?.message ?? "Fetch failed" }, { status: 502 })
   }
 
-  const partner = inferPartner(email.from, email.subject)
+  const partner = inferPartner(email.from, email.subject, email.html)
 
   // Anything we can't attribute — including Gmail's forwarding confirmation
   // code — is parked here so it can be read back via GET
