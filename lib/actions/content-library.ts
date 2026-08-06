@@ -407,7 +407,7 @@ export async function getContent(filters?: {
       publishedAt: true,
       createdAt: true,
     },
-    orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
+    orderBy: [{ publishedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
   })
 }
 

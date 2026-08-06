@@ -206,7 +206,7 @@ export async function checkTranscriptionStatus(id: string) {
 
 export async function getMediaAppearances() {
   return prisma.mediaAppearance.findMany({
-    orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
+    orderBy: [{ publishedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
   })
 }
 

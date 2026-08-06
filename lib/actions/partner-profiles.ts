@@ -35,7 +35,10 @@ export async function generatePartnerProfiles(): Promise<{
       const items = await prisma.partnerContent.findMany({
         where: { partner: partnerKey },
         select: { content: true, title: true, sourceType: true, publishedAt: true },
-        orderBy: [{ publishedAt: "desc" }],
+        // nulls: "last" matters here — Postgres sorts NULLs FIRST on DESC, so
+        // without it `take: 200` grabs undated rows before genuinely recent
+        // ones and the voice profile gets built from the wrong content.
+        orderBy: [{ publishedAt: { sort: "desc", nulls: "last" } }],
         take: 200, // cap at 200 most recent items
       })
 

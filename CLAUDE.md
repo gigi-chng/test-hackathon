@@ -73,6 +73,31 @@ This project has custom slash commands the user may invoke. When they do, follow
 - Use `@@map("table_name")` on every model to set the Postgres table name (lowercase, snake_case, plural).
 - Browse data with `npm run db:studio` (opens Prisma Studio at localhost:5555).
 
+### Local `.env` points at DEV, not production
+
+This is the single easiest mistake to make in this repo, so read it twice.
+
+- `DATABASE_URL` in `.env` is the **dev** Supabase project. Production is a
+  **separate** Supabase project. Anything run locally — Prisma Studio, a `tsx`
+  script, `prisma.partnerContent.findMany()` — reads dev.
+- The crons (`vercel.json`) run in production and write to the **production**
+  database. Dev only changes when someone runs something locally.
+- **The dev database is stale and diverges from production.** It lags by weeks
+  and many rows have `publishedAt: null` where production has real dates.
+- Never answer a question about real content ("what did partners post this
+  week?", "is the agent running?") from the local database. You will get a
+  confidently wrong answer.
+
+To read production data, use the read-only content API:
+
+```bash
+KEY=$(grep -E '^CONTENT_API_KEY=' .env | cut -d= -f2- | tr -d '"')
+curl -s -H "Authorization: Bearer $KEY" \
+  "https://slow-hackathon-xi.vercel.app/api/content?partner=sam&limit=50"
+```
+
+Params: `partner`, `type`, `tag`, `query`, `limit` (max 200).
+
 ## UI and styling
 
 - Use shadcn/ui components for all UI elements. Install new ones with: `pnpm dlx shadcn@latest add <component>`
@@ -92,13 +117,17 @@ This project has custom slash commands the user may invoke. When they do, follow
 
 ## Deployment
 
-- This project uses two branches: `main` (working branch) and `production` (deploys to Vercel).
-- Pushing to `main` does NOT deploy. Pushing to `production` triggers a Vercel build.
-- To deploy: `git push origin main:production` (this pushes main's code to the production branch).
+- **Pushing to `main` deploys straight to production.** There is no staging branch.
+  `.github/workflows/deploy.yml` runs `vercel --prod` on every push to `main`.
+  Treat `main` as production, not as a working branch.
 - The build command is: `prisma generate && prisma db push && next build` — database schema syncs to production automatically.
 - Environment variables for production are managed with `npx vercel env add <NAME> production` or in Vercel → Settings → Environment Variables.
-- Production uses a separate Supabase project (prod) from local development (dev).
-- The /deploy slash command handles the full commit → push to main → push to production flow.
+- **Always confirm the deploy actually succeeded.** A green `git push` means nothing —
+  the GitHub Action can fail independently. Check with `gh run list --limit 3`.
+  If the token is broken, `npx vercel --prod --yes` deploys from local instead.
+  (Known failure mode: `VERCEL_TOKEN` expiring produces
+  `You do not have access to the specified account`, and pushes silently stop
+  deploying while still looking successful in git.)
 
 ## Environment variables
 

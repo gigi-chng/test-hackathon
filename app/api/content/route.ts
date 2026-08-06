@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
       publishedAt: true,
       createdAt:   true,
     },
-    orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
+    orderBy: [{ publishedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
     take: limit,
   })
 
