@@ -260,13 +260,17 @@ ${data.sourceUrl ? `<p><strong>Source:</strong> <a href="${data.sourceUrl}">${da
 
 // ─── Twitter Sync ─────────────────────────────────────────────────────────────
 
-export async function syncTwitter(onlyPartner?: string): Promise<{ ingested: number; skipped: number; errors: number }> {
+export async function syncTwitter(onlyPartner?: string): Promise<{
+  ingested: number; skipped: number; duplicates: number; errors: number; errorDetail: string[]
+}> {
   const bearerToken = process.env.TWITTER_BEARER_TOKEN
   if (!bearerToken) throw new Error("TWITTER_BEARER_TOKEN not set")
 
   let ingested = 0
   let skipped = 0
+  let duplicates = 0
   let errors = 0
+  const errorDetail: string[] = []
 
   const partnerEntries = onlyPartner
     ? Object.entries(PARTNERS).filter(([key]) => key === onlyPartner)
@@ -274,10 +278,13 @@ export async function syncTwitter(onlyPartner?: string): Promise<{ ingested: num
 
   for (const [partner, config] of partnerEntries) {
     try {
-      // Find the last saved tweet for this partner to use as since_id
+      // Find the last saved tweet for this partner to use as since_id.
+      // nulls: "last" is load-bearing — Postgres sorts NULLs FIRST on DESC, so
+      // without it a single row with no publishedAt gets returned as "latest"
+      // and since_id becomes an arbitrary old tweet.
       const lastTweet = await prisma.partnerContent.findFirst({
-        where: { partner, sourceType: "tweet" },
-        orderBy: { publishedAt: "desc" },
+        where: { partner, sourceType: "tweet", publishedAt: { not: null } },
+        orderBy: { publishedAt: { sort: "desc", nulls: "last" } },
         select: { sourceUrl: true },
       })
 
@@ -312,6 +319,11 @@ export async function syncTwitter(onlyPartner?: string): Promise<{ ingested: num
         const sourceUrl = `https://twitter.com/${config.twitterHandle}/status/${tweet.id}`
         if (tweet.text.length < 20) { skipped++; continue }
 
+        // Belt and braces: since_id should already exclude these, but there is
+        // no unique index on sourceUrl, so a bad since_id would otherwise
+        // insert duplicates and report them as new.
+        if (await alreadyIngested(sourceUrl)) { duplicates++; continue }
+
         const embedding = await embed(tweet.text)
         const tags = await generateTags(tweet.text)
 
@@ -340,25 +352,34 @@ export async function syncTwitter(onlyPartner?: string): Promise<{ ingested: num
       }
     } catch (err) {
       console.error(`[syncTwitter] error for ${partner}:`, err)
+      errorDetail.push(`${partner}: ${err instanceof Error ? err.message : String(err)}`)
       errors++
     }
   }
 
-  if (ingested > 0) {
+  // Report on failures too. Previously this only fired when ingested > 0, so a
+  // partner that silently ingested nothing sent no email at all — which reads
+  // as "nothing new" rather than "broken".
+  if (ingested > 0 || errors > 0) {
+    const who = onlyPartner ?? "all partners"
     await sendEmailReport(
-      `Weekly X sync complete — ${ingested} new posts`,
-      `<p>The weekly Twitter sync just finished.</p>
+      errors > 0
+        ? `X sync (${who}) — ${ingested} new, ${errors} error${errors === 1 ? "" : "s"}`
+        : `X sync (${who}) — ${ingested} new post${ingested === 1 ? "" : "s"}`,
+      `<p>Twitter sync finished for <strong>${who}</strong>.</p>
 <ul>
 <li><strong>New posts ingested:</strong> ${ingested}</li>
 <li><strong>Skipped (too short):</strong> ${skipped}</li>
+<li><strong>Skipped (already had it):</strong> ${duplicates}</li>
 <li><strong>Errors:</strong> ${errors}</li>
 </ul>
+${errorDetail.length ? `<p><strong>Error detail:</strong></p><ul>${errorDetail.map(e => `<li>${e}</li>`).join("")}</ul>` : ""}
 <p>View the full library at <a href="https://slow-hackathon.vercel.app/content-library">Content Library</a>.</p>`
     )
   }
 
   revalidatePath("/content-library")
-  return { ingested, skipped, errors }
+  return { ingested, skipped, duplicates, errors, errorDetail }
 }
 
 // ─── Read ─────────────────────────────────────────────────────────────────────
