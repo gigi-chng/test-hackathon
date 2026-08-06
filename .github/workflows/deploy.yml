@@ -3,6 +3,9 @@ name: Deploy to Vercel
 on:
   push:
     branches: [main]
+  # Lets you re-test a deploy (e.g. after rotating VERCEL_TOKEN) without
+  # pushing a commit: gh workflow run deploy.yml
+  workflow_dispatch:
 
 jobs:
   deploy:
