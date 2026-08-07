@@ -20,6 +20,33 @@ async function embed(text: string): Promise<number[]> {
   return res.data[0].embedding
 }
 
+// One call for a whole page instead of one per item. Embedding 100 tweets
+// individually is the main reason a backfill page would blow the 300s limit.
+async function embedBatch(texts: string[]): Promise<number[][]> {
+  if (!texts.length) return []
+  const res = await openai.embeddings.create({
+    model: "text-embedding-3-small",
+    input: texts.map(t => t.slice(0, 8000)),
+  })
+  return res.data.map(d => d.embedding)
+}
+
+// Tagging is one call per item and can't be batched, so run it with bounded
+// concurrency rather than sequentially.
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length)
+  let next = 0
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (next < items.length) {
+        const i = next++
+        out[i] = await fn(items[i])
+      }
+    })
+  )
+  return out
+}
+
 async function generateTags(text: string): Promise<string[]> {
   try {
     const res = await openai.chat.completions.create({
@@ -38,33 +65,6 @@ async function generateTags(text: string): Promise<string[]> {
   } catch {
     return []
   }
-}
-
-async function notifyZapier(item: {
-  partner: string
-  sourceType: string
-  title?: string | null
-  content: string
-  tags: string[]
-  sourceUrl?: string | null
-  publishedAt?: Date | null
-}) {
-  const url = process.env.ZAPIER_WEBHOOK_URL
-  if (!url) return
-  await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      partner: item.partner,
-      type: item.sourceType,
-      title: item.title ?? "",
-      content: item.content.slice(0, 1000),
-      tags: item.tags.join(", "),
-      source_url: item.sourceUrl ?? "",
-      published_date: item.publishedAt ? new Date(item.publishedAt).toISOString().split("T")[0] : "",
-      added_date: new Date().toISOString().split("T")[0],
-    }),
-  }).catch(() => {})
 }
 
 async function sendEmailReport(subject: string, html: string) {
@@ -234,16 +234,6 @@ export async function addContent(data: {
     },
   })
 
-  await notifyZapier({
-    partner: data.partner,
-    sourceType: data.sourceType,
-    title: data.title,
-    content: data.content,
-    tags,
-    sourceUrl: data.sourceUrl,
-    publishedAt: data.publishedAt ? new Date(data.publishedAt) : null,
-  })
-
   await sendEmailReport(
     `New ${data.sourceType} added — ${data.partner}`,
     `<p><strong>Partner:</strong> ${data.partner}</p>
@@ -337,15 +327,6 @@ export async function syncTwitter(onlyPartner?: string): Promise<{
             tags,
             publishedAt: tweet.created_at ? new Date(tweet.created_at) : null,
           },
-        })
-
-        await notifyZapier({
-          partner,
-          sourceType: "tweet",
-          content: tweet.text,
-          tags,
-          sourceUrl,
-          publishedAt: tweet.created_at ? new Date(tweet.created_at) : null,
         })
 
         ingested++
@@ -447,4 +428,174 @@ export async function backfillTags(): Promise<{ updated: number; skipped: number
 
   revalidatePath("/content-library")
   return { updated, skipped }
+}
+
+// ─── Twitter Backfill ─────────────────────────────────────────────────────────
+//
+// syncTwitter only walks forward (since_id), so the library starts wherever the
+// first sync happened to run. This walks backward instead (until_id), one page
+// per partner per run, so history fills in over several days without any single
+// invocation hitting the 300s function limit.
+
+type BackfillPartnerResult = {
+  partner: string
+  added: number
+  duplicates: number
+  tooShort: number
+  oldestDate: string | null
+  exhausted: boolean
+  error?: string
+}
+
+export async function backfillTwitter(onlyPartner?: string): Promise<{
+  results: BackfillPartnerResult[]
+  totalAdded: number
+  allExhausted: boolean
+}> {
+  const bearerToken = process.env.TWITTER_BEARER_TOKEN
+  if (!bearerToken) throw new Error("TWITTER_BEARER_TOKEN not set")
+  const started = Date.now()
+  const BUDGET_MS = 240_000 // leave headroom under the 300s cap
+
+  const entries = onlyPartner
+    ? Object.entries(PARTNERS).filter(([k]) => k === onlyPartner)
+    : Object.entries(PARTNERS)
+
+  const results: BackfillPartnerResult[] = []
+
+  for (const [partner, config] of entries) {
+    const r: BackfillPartnerResult = {
+      partner, added: 0, duplicates: 0, tooShort: 0, oldestDate: null, exhausted: false,
+    }
+    if (Date.now() - started > BUDGET_MS) {
+      r.error = "skipped — ran out of time this run, will resume next run"
+      results.push(r)
+      continue
+    }
+
+    try {
+      // Anchor on the oldest tweet we already hold. Snowflake IDs are numeric,
+      // so compare as BigInt — string sort gets this wrong across digit counts.
+      const stored = await prisma.partnerContent.findMany({
+        where: { partner, sourceType: "tweet", sourceUrl: { not: null } },
+        select: { sourceUrl: true },
+      })
+      const ids = stored
+        .map(s => s.sourceUrl?.split("/status/")[1])
+        .filter((v): v is string => !!v && /^\d+$/.test(v))
+      if (!ids.length) {
+        r.error = "no stored tweets to anchor from; run the forward sync first"
+        results.push(r)
+        continue
+      }
+      const untilId = ids.reduce((min, id) => (BigInt(id) < BigInt(min) ? id : min))
+
+      const userRes = await fetch(
+        `https://api.twitter.com/2/users/by/username/${config.twitterHandle}?user.fields=id`,
+        { headers: { Authorization: `Bearer ${bearerToken}` } }
+      )
+      const userId = (await userRes.json())?.data?.id
+      if (!userId) { r.error = "user lookup failed"; results.push(r); continue }
+
+      const params = new URLSearchParams({
+        max_results: "100",
+        "tweet.fields": "created_at,text",
+        exclude: "retweets,replies",
+        until_id: untilId,
+      })
+      const res = await fetch(
+        `https://api.twitter.com/2/users/${userId}/tweets?${params}`,
+        { headers: { Authorization: `Bearer ${bearerToken}` } }
+      )
+      const data = await res.json()
+      if (data?.errors || data?.title) {
+        r.error = JSON.stringify(data).slice(0, 200)
+        results.push(r)
+        continue
+      }
+
+      const tweets: { id: string; text: string; created_at?: string }[] = data?.data ?? []
+      // No next_token means we've reached the end of what the API will return.
+      r.exhausted = tweets.length === 0 || !data?.meta?.next_token
+
+      const fresh: typeof tweets = []
+      for (const t of tweets) {
+        if (t.text.length < 20) { r.tooShort++; continue }
+        const url = `https://twitter.com/${config.twitterHandle}/status/${t.id}`
+        if (await alreadyIngested(url)) { r.duplicates++; continue }
+        fresh.push(t)
+      }
+
+      if (fresh.length) {
+        const [embeddings, tagSets] = await Promise.all([
+          embedBatch(fresh.map(t => t.text)),
+          mapLimit(fresh, 8, t => generateTags(t.text)),
+        ])
+        await prisma.partnerContent.createMany({
+          data: fresh.map((t, i) => ({
+            partner,
+            sourceType: "tweet",
+            sourceUrl: `https://twitter.com/${config.twitterHandle}/status/${t.id}`,
+            content: t.text,
+            embedding: embeddings[i],
+            tags: tagSets[i],
+            publishedAt: t.created_at ? new Date(t.created_at) : null,
+          })),
+        })
+        r.added = fresh.length
+        const dates = fresh.map(t => t.created_at).filter(Boolean).sort() as string[]
+        r.oldestDate = dates[0]?.slice(0, 10) ?? null
+      }
+    } catch (err) {
+      r.error = err instanceof Error ? err.message : String(err)
+    }
+    results.push(r)
+  }
+
+  const totalAdded = results.reduce((n, r) => n + r.added, 0)
+  const allExhausted = results.every(r => r.exhausted || !!r.error)
+
+  // Progress recap after every run, whether or not anything landed.
+  const totals = await prisma.partnerContent.groupBy({
+    by: ["partner"],
+    where: { sourceType: "tweet" },
+    _count: { id: true },
+  })
+  const totalMap = Object.fromEntries(totals.map(t => [t.partner, t._count.id]))
+
+  const rows = results.map(r => {
+    const status = r.error
+      ? `<span style="color:#b00">${r.error}</span>`
+      : r.exhausted
+        ? "complete — no older tweets remain"
+        : "more history available"
+    return `<tr>
+<td style="padding:4px 10px 4px 0"><strong>${r.partner}</strong></td>
+<td style="padding:4px 10px 4px 0">+${r.added}</td>
+<td style="padding:4px 10px 4px 0">${totalMap[r.partner] ?? 0} total</td>
+<td style="padding:4px 10px 4px 0">${r.oldestDate ? `back to ${r.oldestDate}` : "—"}</td>
+<td style="padding:4px 10px 4px 0">${status}</td>
+</tr>`
+  }).join("")
+
+  await sendEmailReport(
+    allExhausted
+      ? `Twitter backfill complete — ${totalAdded} added on the final run`
+      : `Twitter backfill — ${totalAdded} tweets added`,
+    `<p>Backfill run finished. It walks backward one page per partner per day, so this repeats until every partner is complete.</p>
+<table style="border-collapse:collapse;font-family:system-ui,sans-serif;font-size:14px">
+<tr style="text-align:left;border-bottom:1px solid #ddd">
+<th style="padding:4px 10px 4px 0">Partner</th><th style="padding:4px 10px 4px 0">Added</th>
+<th style="padding:4px 10px 4px 0">Library</th><th style="padding:4px 10px 4px 0">Reached</th>
+<th style="padding:4px 10px 4px 0">Status</th></tr>
+${rows}
+</table>
+<p>${allExhausted
+  ? "<strong>Every partner is now fully backfilled.</strong> You can remove the backfill cron from vercel.json."
+  : "Another page runs tomorrow."}</p>
+<p>Skipped this run: ${results.reduce((n, r) => n + r.duplicates, 0)} already in the library, ${results.reduce((n, r) => n + r.tooShort, 0)} too short.</p>`
+  )
+
+  revalidatePath("/content-library")
+  return { results, totalAdded, allExhausted }
 }
