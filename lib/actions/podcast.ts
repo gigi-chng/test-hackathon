@@ -37,8 +37,8 @@ Return ONLY valid JSON:
 }`
 
   const response = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 2000,
+    model: "claude-sonnet-5",
+    max_tokens: 8000,
     messages: [{ role: "user", content: prompt }],
   })
 
@@ -130,8 +130,8 @@ Return ONLY valid JSON:
 }`
 
   const response = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 3000,
+    model: "claude-sonnet-5",
+    max_tokens: 12000,
     messages: [{ role: "user", content: prompt }],
   })
 
@@ -275,8 +275,8 @@ Return ONLY valid JSON:
 }`
 
   const response = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 6000,
+    model: "claude-sonnet-5",
+    max_tokens: 16000,
     messages: [{ role: "user", content: prompt }],
   })
 
@@ -368,8 +368,8 @@ verdict rules: "post" = passes all 6 checks. "edit" = 1-2 failures with clear fi
 edits: list the specific cuts or rewrites needed. If verdict is "post", return an empty array.`
 
   const response = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 2000,
+    model: "claude-sonnet-5",
+    max_tokens: 8000,
     messages: [{ role: "user", content: prompt }],
   })
 
@@ -414,8 +414,8 @@ FILE CONTENT:
 ${content}`
 
   const response = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 8000,
+    model: "claude-sonnet-5",
+    max_tokens: 16000,
     messages: [{ role: "user", content: prompt }],
   })
 
@@ -525,8 +525,8 @@ CLIP SELECTION RULES — pick the 5 moments that have:
 Return ONLY the JSON. No markdown fences, no explanation.`
 
   const response = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 4000,
+    model: "claude-sonnet-5",
+    max_tokens: 16000,
     messages: [{ role: "user", content: prompt }],
   })
 

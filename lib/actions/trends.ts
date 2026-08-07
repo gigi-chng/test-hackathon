@@ -227,7 +227,7 @@ async function generateDraft(
     megan: "linkedin.com/in/megan-lightcap-513ab96b",
   }
 
-  // Pull 5 recent tweets from this partner to use as voice examples
+  // Short-form voice for the Twitter post
   const voiceSamples = await prisma.partnerContent.findMany({
     where: { partner, sourceType: "tweet" },
     orderBy: { createdAt: "desc" },
@@ -236,6 +236,22 @@ async function generateDraft(
   })
 
   const voiceExamples = voiceSamples.map((s, i) => `${i + 1}. "${s.content}"`).join("\n")
+
+  // Long-form voice for the LinkedIn body. Tweets are the wrong length to imitate
+  // for a 600-900 character post, and with nothing else to copy the model falls
+  // back to a generic analyst register.
+  const longFormSamples = await prisma.partnerContent.findMany({
+    where: { partner, sourceType: { in: ["newsletter", "blog", "podcast"] } },
+    orderBy: { publishedAt: { sort: "desc", nulls: "last" } },
+    take: 2,
+    select: { content: true },
+  })
+
+  const longFormExamples = longFormSamples.length
+    ? `\nAnd here is how ${partnerNames[partner].split(" ")[0]} writes at length. Match this rhythm for the LinkedIn post:\n\n${longFormSamples
+        .map((s, i) => `${i + 1}. "${s.content.slice(0, 1200).trim()}..."`)
+        .join("\n\n")}\n`
+    : ""
 
   // Pull recent feedback from past drafts
   const pastFeedback = await prisma.postDraft.findMany({
@@ -250,8 +266,8 @@ async function generateDraft(
     : ""
 
   const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 1800,
+    model: "claude-sonnet-5",
+    max_tokens: 8000,
     messages: [
       {
         role: "user",
@@ -260,7 +276,7 @@ async function generateDraft(
 Here are recent things ${partnerNames[partner].split(" ")[0]} has actually posted. Study the sentence structure, word choice, length, and how they build an argument:
 
 ${voiceExamples}
-
+${longFormExamples}
 ---
 
 ${feedbackSection}They're reacting to this:
@@ -273,27 +289,28 @@ Source: ${sourceUrl}
 
 Write TWO versions — one for Twitter, one for LinkedIn.
 
+Register, before anything else: write the way they'd say this out loud to a smart
+friend who works in tech, not the way they'd write it up for an investment committee.
+Plain words. Short sentences. The reasoning should feel like someone talking, not
+like analysis being presented. If a sentence sounds like it belongs in a memo or a
+deck, rewrite it as something a person would actually say. Specifics are welcome when
+they're the natural way to make the point, but a post that reads like a paragraph of
+financial analysis has missed. Nobody has to do arithmetic to follow this.
+
 TWITTER (under 220 characters total, not counting the handle appended separately):
-- Name the thing directly. Reference the specific news, company, or trend by name — don't be vague
-- Lead with the sharpest possible take, not a warm-up sentence
-- Surfaces an insight sophisticated investors have been saying privately but mainstream hasn't caught onto yet
-- REPOST RULE: Write something someone wants to be the first to share in their VC/founder group chat — a claim that makes the sharer look smart or prescient. Must be specific, non-obvious, feels like insider access.
-- REPLY RULE: State a strong opinion as fact — not hedged, not balanced. The best replies come from people who disagree. Lean into the controversial or counterintuitive angle. A contestable position beats a consensus take every time.
-- BOOKMARK RULE: Include one thing that makes someone want to save it — a specific number, a counterintuitive framing, or a named company prediction they'll want to reference later.
-- DWELL RULE: Write something that takes more than 2 seconds to process. A take with real density — a number, a named company, a mechanism — beats a one-liner platitude. Make them stop and think.
-- PROFILE CLICK RULE: Write things that make people wonder "who is this." First-person stakes, contrarian claim, or identity hook. The reader should want to know more about the person behind the take.
-- AVOID: generic phrasing that sounds like every other VC tweet. Avoid trigger words that land on mute lists. Avoid anything that could have been written by anyone. Topic consistency matters — stay in VC/tech/markets lane.
-- Shorter is better. A punchy 140-character post outperforms a bloated 260-character one. Cut every word that doesn't add to the take.
-- Declarative and confident — no questions, no hedging
+- Name the thing directly. Reference the specific news, company, or trend by name
+- Lead with the take, not a warm-up sentence
+- One clear opinion, stated as fact. Not hedged, not balanced. A contestable position beats a consensus take
+- Say something a reader hasn't already heard five times this week
+- Shorter is better. A punchy 140-character post beats a crammed 260-character one
+- Declarative and confident. No questions, no hedging
 - Hard rules: no em dashes, no hashtags, no emojis, no "worth noting/exciting/important/signals that", no corporate language
 
 LINKEDIN (aim for 600-900 characters):
-- ANCHOR RULE: Every LinkedIn post must be anchored to a SPECIFIC named company, named person, real data point, or dollar figure from the trend or the partner's citation. Never post a generic take without a real anchor. If the trend mentions a specific company — name it. If the citation has a dollar figure or stat — use it. This is the single most important rule.
-- MATH RULE: When there are numbers in the trend (valuations, round sizes, percentages, multiples), do the actual arithmetic in the post. Show the calculation, not just the conclusion. "140x from seed gets you to $800B, which sounds incredible until you run the dilution" outperforms "the valuation is high." Readers share posts that do the math they didn't do themselves.
-- Line 1: One sharp hook sentence — same energy as the Twitter post, makes someone stop scrolling. Name the specific company/person/number if possible.
-- Lines 2-4: Expand the partner's actual thinking. Show the mechanism — why does this number or decision reveal something non-obvious? What does the math or the structure actually imply about strategy, incentives, or risk? The reader should feel like they're getting access to how a smart investor actually thinks through a deal or trend, not a summary of it.
-- Final line: A confident declarative statement or sharp prediction. No questions.
-- Write in the partner's voice with more room to breathe — LinkedIn readers expect more depth.
+- Line 1: One sharp hook sentence, same energy as the Twitter post. Name the company, person, or number if there is a natural one
+- The body: keep talking. Say the thing behind the take — what they think is actually going on and why they believe it. Conversational and specific, the way they'd explain it in person. Let it breathe across a few short paragraphs rather than compressing it
+- Ground it in something real from the trend or the citation, but only where it comes up naturally. A named company or a figure is good when it belongs; do not force one in
+- Final line: A confident declarative statement or a sharp prediction. No questions
 - Hard rules: no em dashes, no hashtags, no questions at the end, no bullet points
 
 Hard rules for BOTH:
@@ -567,8 +584,8 @@ async function generateVideoPostDraft(
     : ""
 
   const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 1800,
+    model: "claude-sonnet-5",
+    max_tokens: 8000,
     messages: [{
       role: "user",
       content: `You are ghostwriting social posts for Slow Ventures to promote a video clip featuring ${name}.
@@ -584,16 +601,21 @@ ${video.transcript.slice(0, 3000)}
 
 Write TWO versions — Twitter and LinkedIn — that tease the sharpest, most specific insight from this transcript.
 
+Register, before anything else: write the way ${firstName} would say this out loud to
+a smart friend who works in tech, not the way they'd write it up for an investment
+committee. Plain words, short sentences, reasoning that sounds like someone talking.
+If a line sounds like it belongs in a memo, rewrite it as something a person would say.
+
 TWITTER (under 220 characters, not counting the handle appended separately):
 - Find the single most quotable, surprising, or counterintuitive line in the transcript and build the post around it
 - Write it in ${firstName}'s voice as if they're pointing their audience to this moment
-- Reference something specific — a named company, a claim, a number, a framing — not "we discussed X"
+- Reference something concrete — a named company, a claim, a framing — not "we discussed X"
 - No questions, no em dashes, no hashtags, no emojis, no corporate language
 - Shorter is better
 
 LINKEDIN (600-900 characters):
-- Line 1: Sharp hook — the specific insight from the video that makes someone stop. Name the company/person/number.
-- Lines 2-4: Expand the reasoning. Show why this specific point matters — the mechanism, the implication, the thing most people miss. Grounded in what was actually said in the transcript.
+- Line 1: Sharp hook — the specific insight from the video that makes someone stop. Name the company or person if there's a natural one
+- The body: keep talking. Say why this point matters and what they think most people are getting wrong, conversationally, across a few short paragraphs. Grounded in what was actually said in the transcript
 - Final line: Confident declarative. No questions.
 - No em dashes, no hashtags, no bullet points
 
@@ -688,8 +710,8 @@ async function generateVideoPostDraftWithTrend(
     : ""
 
   const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 1800,
+    model: "claude-sonnet-5",
+    max_tokens: 8000,
     messages: [{
       role: "user",
       content: `You are creating social posts for ${name} at Slow Ventures that connect a specific video insight to what's trending right now on X.
@@ -707,15 +729,20 @@ ${voiceExamples}
 ${feedbackSection}
 Your job: find the sharpest, most specific insight from the transcript that directly relates to the trending moment. Build both posts around that specific connection.
 
+Register, before anything else: write the way they'd say this out loud to a smart
+friend who works in tech, not the way they'd write it up for an investment committee.
+Plain words, short sentences, reasoning that sounds like someone talking. If a line
+sounds like it belongs in a memo, rewrite it as something a person would actually say.
+
 X POST (under 220 characters, not counting handle appended separately):
 - Name the specific trend or company from the trending moment
-- Connect it to a specific insight from the transcript — a quote, a number, a named company, a concrete claim
+- Connect it to a concrete insight from the transcript — a quote or a claim they actually made
 - Declarative and confident. No questions, no em dashes, no hashtags, no emojis
-- Write something that makes someone want to share it in a VC group chat
+- Write something someone would want to share in a VC group chat
 
 LINKEDIN POST (600-900 characters):
-- Line 1: One sharp hook connecting the trending moment to the video insight. Name the specific company/trend/number.
-- Lines 2-4: Show the mechanism — why does this specific insight matter in light of the trend? What does it reveal that most people miss?
+- Line 1: One sharp hook connecting the trending moment to the video insight. Name the company or trend if there's a natural one
+- The body: keep talking. Say why this insight matters here and what they think most people are getting wrong, conversationally, across a few short paragraphs
 - Final line: Confident declarative. No questions.
 - No em dashes, no hashtags, no bullet points
 

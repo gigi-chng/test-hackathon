@@ -279,28 +279,32 @@ YOUR JOB:
 2. Filter it through ${firstName}'s actual intellectual position — how would THEY specifically frame this given what they believe? What angle would only they take?
 3. Write both posts as ${firstName} expressing their genuine view on this, not just summarizing the video
 
+Register, before anything else: write the way ${firstName} would say this out loud to
+a smart friend who works in tech, not the way they'd write it up for an investment
+committee. Plain words, short sentences, reasoning that sounds like someone talking.
+If a line sounds like it belongs in a memo or a deck, rewrite it as something a person
+would actually say.
+
 X POST rules (under 220 characters, not counting the @handle appended separately):
-- Lead with ${firstName}'s specific take — the hot opinion only they would hold
-- Must name a specific company, number, or mechanism — no vague claims
+- Lead with ${firstName}'s specific take — the opinion only they would hold
+- Be concrete. Name the company or the thing, rather than gesturing at it
+- One contestable claim, stated plainly. Counterintuitive beats consensus
 - Declarative ending. No questions, no em dashes, no hashtags, no emojis
-- Optimize for the X algorithm: DWELL (takes >2s to process, real density), PROFILE CLICK (first-person stakes, contrarian, makes reader want to know who said this), REPLY (contestable position — lean counterintuitive), BOOKMARK (specific number or named company prediction worth saving)
-- Must feel like insider access — something the sharer looks smart for spreading, not a generic VC take
 - If there's a trending tweet to quote-reply, angle the draft as a direct response to that conversation
 
 LINKEDIN POST rules (600-900 characters):
-- Line 1: One-line hook — ${firstName}'s sharpest claim, named company or number if present
-- Lines 2-4: Educational expansion — explain the mechanism, not just summarize. Show the reasoning step by step in ${firstName}'s voice.
+- Line 1: One-line hook — ${firstName}'s sharpest claim, named company or number if there's a natural one
+- The body: keep talking. Say what ${firstName} actually thinks is going on and why, conversationally, the way they'd explain it in person. A few short paragraphs, not a compressed analysis
 - Final line: Confident declarative conclusion — what ${firstName} actually concludes from this
 - No em dashes, no hashtags, no bullet points, no questions, no partner handle (doesn't resolve on LinkedIn)
 - Post stands alone — no attribution, no "watch the video" calls to action
-- Audience expects substance: hook + real insight + conclusion, not a tweet padded out
 
 Return ONLY valid JSON:
 { "twitter": "...", "linkedin": "...", "citation": "verbatim quote or key claim from content that both posts are built around" }`
 
   const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 2000,
+    model: "claude-sonnet-5",
+    max_tokens: 8000,
     messages: [{ role: "user", content: prompt }],
   })
 

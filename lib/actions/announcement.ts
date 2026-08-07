@@ -7,8 +7,8 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 export async function generateAnnouncementPosts(pressRelease: string): Promise<{ twitter: string; linkedin: string }> {
   const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 1800,
+    model: "claude-sonnet-5",
+    max_tokens: 8000,
     messages: [
       {
         role: "user",

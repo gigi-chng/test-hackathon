@@ -19,8 +19,8 @@ export type ComicConcept = {
 
 export async function generateComicConcepts(newsletterText: string): Promise<ComicConcept[]> {
   const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 3000,
+    model: "claude-sonnet-5",
+    max_tokens: 12000,
     messages: [
       {
         role: "user",

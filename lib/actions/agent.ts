@@ -169,8 +169,8 @@ export async function rewriteDraftWithAI(id: string, instruction: string): Promi
   const handle = partnerHandles[draft.partner] || ""
 
   const response = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 1800,
+    model: "claude-sonnet-5",
+    max_tokens: 8000,
     messages: [{
       role: "user",
       content: `You are editing social media drafts for ${name} at Slow Ventures.
