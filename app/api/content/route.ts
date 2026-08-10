@@ -17,20 +17,39 @@ export async function GET(req: NextRequest) {
   const tag        = searchParams.get("tag")        ?? undefined
   const query      = searchParams.get("query")      ?? undefined
   const limit      = Math.min(parseInt(searchParams.get("limit") ?? "50"), 200)
+  const offset     = Math.max(parseInt(searchParams.get("offset") ?? "0"), 0)
+  // Date range on publishedAt. Without these, a high-volume partner's newest
+  // 200 rows can stop short of the window you asked for — Yoni posts ~3x/day,
+  // so an unfiltered page only reaches back about two months.
+  const since      = searchParams.get("since") ?? undefined
+  const until      = searchParams.get("until") ?? undefined
+
+  const publishedAt =
+    since || until
+      ? {
+          ...(since && { gte: new Date(since) }),
+          ...(until && { lte: new Date(`${until}T23:59:59.999Z`) }),
+        }
+      : undefined
+
+  const where = {
+    ...(partner    && { partner }),
+    ...(sourceType && { sourceType }),
+    ...(tag        && { tags: { has: tag } }),
+    ...(publishedAt && { publishedAt }),
+    ...(query      && {
+      OR: [
+        { content: { contains: query, mode: "insensitive" as const } },
+        { title:   { contains: query, mode: "insensitive" as const } },
+        { tags:    { has: query.toLowerCase() } },
+      ],
+    }),
+  }
+
+  const total = await prisma.partnerContent.count({ where })
 
   const items = await prisma.partnerContent.findMany({
-    where: {
-      ...(partner    && { partner }),
-      ...(sourceType && { sourceType }),
-      ...(tag        && { tags: { has: tag } }),
-      ...(query      && {
-        OR: [
-          { content: { contains: query, mode: "insensitive" } },
-          { title:   { contains: query, mode: "insensitive" } },
-          { tags:    { has: query.toLowerCase() } },
-        ],
-      }),
-    },
+    where,
     select: {
       id:          true,
       partner:     true,
@@ -43,11 +62,15 @@ export async function GET(req: NextRequest) {
       createdAt:   true,
     },
     orderBy: [{ publishedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+    skip: offset,
     take: limit,
   })
 
   return NextResponse.json({
     count: items.length,
+    total,
+    offset,
+    hasMore: offset + items.length < total,
     items,
   })
 }
