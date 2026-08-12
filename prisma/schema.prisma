@@ -59,8 +59,8 @@ model VerificationToken {
 
 model PartnerContent {
   id          String    @id @default(cuid())
-  partner     String    // "sam" | "will" | "yoni" | "megan"
-  sourceType  String    // "tweet" | "blog" | "newsletter" | "podcast" | "press"
+  partner     String // "sam" | "will" | "yoni" | "megan"
+  sourceType  String // "tweet" | "blog" | "newsletter" | "podcast" | "press"
   sourceUrl   String?
   title       String?
   content     String
@@ -70,6 +70,10 @@ model PartnerContent {
   publishedAt DateTime?
   createdAt   DateTime  @default(now())
 
+  // Every ingest path checks sourceUrl before writing, once per item. Without
+  // an index that is a sequential scan per tweet.
+  @@index([sourceUrl])
+  @@index([partner, sourceType, publishedAt])
   @@map("partner_content")
 }
 
@@ -126,8 +130,8 @@ model AppSetting {
 
 model MediaAppearance {
   id              String    @id @default(cuid())
-  partner         String    // "sam" | "will" | "yoni" | "megan"
-  type            String    // "podcast" | "press" | "panel" | "newsletter" | "video" | "other"
+  partner         String // "sam" | "will" | "yoni" | "megan"
+  type            String // "podcast" | "press" | "panel" | "newsletter" | "video" | "other"
   show            String
   title           String
   url             String
@@ -143,13 +147,13 @@ model MediaAppearance {
 }
 
 model TrackerProject {
-  id          String          @id @default(cuid())
-  vertical    String          // "slow" | "slow-creator" | "sam"
+  id          String   @id @default(cuid())
+  vertical    String // "slow" | "slow-creator" | "sam"
   name        String
   description String?
-  status      String          @default("active") // active | paused | completed
-  order       Int             @default(0)
-  createdAt   DateTime        @default(now())
+  status      String   @default("active") // active | paused | completed
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
 
   kpis        TrackerKPI[]
   weeklyGoals TrackerGoal[]
@@ -175,11 +179,11 @@ model TrackerKPI {
 model TrackerGoal {
   id          String         @id @default(cuid())
   projectId   String
-  weekOf      DateTime       // Monday of the week
+  weekOf      DateTime // Monday of the week
   text        String
   type        String         @default("deliverable") // "deliverable" | "metric"
-  workType    String         @default("sprint")      // "sprint" | "maintenance"
-  priority    String         @default("p2")          // "p1" | "p2" | "p3"
+  workType    String         @default("sprint") // "sprint" | "maintenance"
+  priority    String         @default("p2") // "p1" | "p2" | "p3"
   rankOrder   Int            @default(0)
   targetValue Float?
   actualValue Float?
@@ -202,24 +206,24 @@ model TrackerUpdate {
 }
 
 model PostDraft {
-  id              String    @id @default(cuid())
-  trendSignalId   String?
-  partner         String
-  partnerCitation String
-  hook            String
-  body            String
-  platform        String    @default("both") // twitter | linkedin | both
-  videoId         String?
-  quoteTweetId    String?
-  quoteTweetUrl   String?
+  id               String    @id @default(cuid())
+  trendSignalId    String?
+  partner          String
+  partnerCitation  String
+  hook             String
+  body             String
+  platform         String    @default("both") // twitter | linkedin | both
+  videoId          String?
+  quoteTweetId     String?
+  quoteTweetUrl    String?
   partnerSourceUrl String?
-  status          String    @default("pending") // pending | approved | rejected | published
-  approvalToken   String    @unique @default(cuid())
-  feedback        String?
-  source          String    @default("agent") // "agent" | "announcement"
-  scheduledAt     DateTime?
-  publishedAt     DateTime?
-  createdAt       DateTime  @default(now())
+  status           String    @default("pending") // pending | approved | rejected | published
+  approvalToken    String    @unique @default(cuid())
+  feedback         String?
+  source           String    @default("agent") // "agent" | "announcement"
+  scheduledAt      DateTime?
+  publishedAt      DateTime?
+  createdAt        DateTime  @default(now())
 
   @@map("post_drafts")
 }

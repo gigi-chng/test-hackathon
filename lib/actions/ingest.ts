@@ -4,6 +4,7 @@ import * as cheerio from "cheerio"
 import OpenAI from "openai"
 import { prisma } from "@/lib/db/prisma"
 import { PARTNERS, type Partner } from "@/lib/partners"
+import { generateTags } from "@/lib/ai/tags"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
@@ -60,6 +61,31 @@ const SOURCE_TYPE: Record<string, string> = {
   beehiiv: "newsletter",
   wlessin: "blog",
   generic: "blog",
+}
+
+// The real publication date lives on the post page, not in the sitemap.
+// beehiiv's sitemap reports <lastmod>, which is the last time the page was
+// regenerated — a site-wide rebuild stamps every post with the same day and
+// silently destroys the archive's chronology.
+function extractPublishedAt(html: string): Date | null {
+  const candidates = [
+    /<meta[^>]+property=["']article:published_time["'][^>]+content=["']([^"']+)["']/i,
+    /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']article:published_time["']/i,
+    /"datePublished"\s*:\s*"([^"]+)"/i,
+    /<time[^>]+datetime=["']([^"']+)["']/i,
+  ]
+
+  for (const re of candidates) {
+    const raw = html.match(re)?.[1]
+    if (!raw) continue
+    const d = new Date(raw)
+    // Guard against garbage and against dates that can't be real posts.
+    if (!isNaN(d.getTime()) && d.getFullYear() > 2000 && d.getTime() < Date.now() + 864e5) {
+      return d
+    }
+  }
+
+  return null
 }
 
 function extractArticle(html: string, selectors: string[]): { title: string; content: string } {
@@ -317,10 +343,15 @@ export type BlogIngestResult = {
   ingested: number
   skipped: number
   errors: number
+  repaired?: number
   message?: string
 }
 
-export async function ingestPartnerBlog(partner: Partner, limit = 40): Promise<BlogIngestResult> {
+export async function ingestPartnerBlog(
+  partner: Partner,
+  limit = 40,
+  repair = false,
+): Promise<BlogIngestResult> {
   const config = PARTNERS[partner]
   const blogType: string = config.blogType
   const cookie = blogType === "wlessin" ? process.env.WLESSIN_COOKIE : undefined
@@ -351,16 +382,48 @@ export async function ingestPartnerBlog(partner: Partner, limit = 40): Promise<B
   let ingested = 0
   let skipped = 0
   let errors = 0
+  let repaired = 0
 
   for (const post of posts) {
     try {
-      if (await alreadyIngested(post.url)) { skipped++; continue }
+      const existing = await prisma.partnerContent.findFirst({
+        where: { sourceUrl: post.url },
+        select: { id: true, publishedAt: true, tags: true },
+      })
+
+      // Normal runs leave stored posts alone. A repair run re-reads the page
+      // to correct rows written before we parsed dates and tags properly.
+      if (existing && !repair) { skipped++; continue }
 
       const html = await fetchText(post.url, cookie)
       const article = extractArticle(html, selectors)
       if (article.content.length < 200) { skipped++; continue }
 
-      const embedding = await embed(article.content)
+      // The page's own metadata beats whatever the listing claimed.
+      const publishedAt = extractPublishedAt(html) ?? post.publishedAt
+
+      if (existing) {
+        const dateWrong =
+          publishedAt && existing.publishedAt?.getTime() !== publishedAt.getTime()
+        const needsTags = existing.tags.length === 0
+
+        if (!dateWrong && !needsTags) { skipped++; continue }
+
+        await prisma.partnerContent.update({
+          where: { id: existing.id },
+          data: {
+            ...(dateWrong && { publishedAt }),
+            ...(needsTags && { tags: await generateTags(article.content) }),
+          },
+        })
+        repaired++
+        continue
+      }
+
+      const [embedding, tags] = await Promise.all([
+        embed(article.content),
+        generateTags(article.content),
+      ])
       await prisma.partnerContent.create({
         data: {
           partner,
@@ -369,7 +432,8 @@ export async function ingestPartnerBlog(partner: Partner, limit = 40): Promise<B
           title: post.title || article.title || null,
           content: article.content,
           embedding,
-          publishedAt: post.publishedAt,
+          tags,
+          publishedAt,
         },
       })
       ingested++
@@ -385,7 +449,7 @@ export async function ingestPartnerBlog(partner: Partner, limit = 40): Promise<B
     create: { partner },
   })
 
-  return { ingested, skipped, errors }
+  return { ingested, skipped, errors, repaired }
 }
 
 // ─── Ingest all partners ──────────────────────────────────────────────────────

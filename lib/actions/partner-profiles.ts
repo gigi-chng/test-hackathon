@@ -33,7 +33,10 @@ export async function generatePartnerProfiles(): Promise<{
   for (const [partnerKey, config] of Object.entries(PARTNERS)) {
     try {
       const items = await prisma.partnerContent.findMany({
-        where: { partner: partnerKey },
+        // Press is coverage *about* the partner, written by a journalist. The
+        // prompt below hands this corpus over as "their published content", so
+        // including it teaches the model a reporter's voice, not theirs.
+        where: { partner: partnerKey, sourceType: { not: "press" } },
         select: { content: true, title: true, sourceType: true, publishedAt: true },
         // nulls: "last" matters here — Postgres sorts NULLs FIRST on DESC, so
         // without it `take: 200` grabs undated rows before genuinely recent

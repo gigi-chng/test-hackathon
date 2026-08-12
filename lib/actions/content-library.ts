@@ -6,6 +6,7 @@ import { Resend } from "resend"
 import { prisma } from "@/lib/db/prisma"
 import { revalidatePath } from "next/cache"
 import { PARTNERS } from "@/lib/partners"
+import { generateTags } from "@/lib/ai/tags"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 const getResend = () => new Resend(process.env.RESEND_API_KEY)
@@ -47,24 +48,24 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
   return out
 }
 
-async function generateTags(text: string): Promise<string[]> {
-  try {
-    const res = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "system",
-          content: `Extract 3-6 concise topic tags from the content. Tags should be lowercase, 1-3 words, representing key themes (e.g. "venture capital", "creator economy", "SMB", "fundraising", "product growth"). Return JSON: { "tags": ["tag1", "tag2"] }`,
-        },
-        { role: "user", content: text.slice(0, 3000) },
-      ],
-    })
-    const parsed = JSON.parse(res.choices[0].message.content ?? "{}")
-    return Array.isArray(parsed.tags) ? parsed.tags.map((t: string) => t.toLowerCase().trim()) : []
-  } catch {
-    return []
-  }
+// Turn an X API failure into something a human can act on. The status code is
+// the part that matters: 402 means the account is out of credits, 401 means the
+// token is dead, 429 means slow down. Without it every failure reads the same.
+function describeTwitterError(status: number, body: unknown): string {
+  const b = body as { detail?: string; title?: string; errors?: { message?: string }[] } | null
+  const detail =
+    b?.detail ??
+    b?.title ??
+    b?.errors?.[0]?.message ??
+    (status === 200 ? "no user in response" : "no detail returned")
+
+  const hint =
+    status === 402 ? " — top up the X API plan"
+    : status === 401 ? " — TWITTER_BEARER_TOKEN is invalid or revoked"
+    : status === 429 ? " — rate limited, will retry next run"
+    : ""
+
+  return `HTTP ${status}: ${detail}${hint}`
 }
 
 async function sendEmailReport(subject: string, html: string) {
@@ -288,7 +289,16 @@ export async function syncTwitter(onlyPartner?: string): Promise<{
       )
       const userData = await userRes.json()
       const userId = userData?.data?.id
-      if (!userId) { errors++; continue }
+      if (!userId) {
+        // Surface why. A 402 (credits depleted), a revoked token and a genuinely
+        // missing handle are three very different problems, and collapsing them
+        // into a bare counter once cost us nine days of silent failures.
+        errorDetail.push(
+          `${partner}: user lookup failed — ${describeTwitterError(userRes.status, userData)}`,
+        )
+        errors++
+        continue
+      }
 
       // Fetch tweets since last save (or max 100 on first sync)
       const params = new URLSearchParams({
@@ -494,8 +504,13 @@ export async function backfillTwitter(onlyPartner?: string): Promise<{
         `https://api.twitter.com/2/users/by/username/${config.twitterHandle}?user.fields=id`,
         { headers: { Authorization: `Bearer ${bearerToken}` } }
       )
-      const userId = (await userRes.json())?.data?.id
-      if (!userId) { r.error = "user lookup failed"; results.push(r); continue }
+      const userBody = await userRes.json()
+      const userId = userBody?.data?.id
+      if (!userId) {
+        r.error = `user lookup failed — ${describeTwitterError(userRes.status, userBody)}`
+        results.push(r)
+        continue
+      }
 
       const params = new URLSearchParams({
         max_results: "100",
@@ -553,7 +568,11 @@ export async function backfillTwitter(onlyPartner?: string): Promise<{
   }
 
   const totalAdded = results.reduce((n, r) => n + r.added, 0)
-  const allExhausted = results.every(r => r.exhausted || !!r.error)
+  // "Complete" must mean the API confirmed there is nothing older, never that a
+  // partner errored. Counting failures as done meant a total outage produced a
+  // "backfill complete — you can remove the cron" email.
+  const anyFailed = results.some(r => !!r.error)
+  const allExhausted = !anyFailed && results.every(r => r.exhausted)
 
   // Progress recap after every run, whether or not anything landed.
   const totals = await prisma.partnerContent.groupBy({
