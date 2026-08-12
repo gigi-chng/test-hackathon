@@ -70,10 +70,6 @@ model PartnerContent {
   publishedAt DateTime?
   createdAt   DateTime  @default(now())
 
-  // Every ingest path checks sourceUrl before writing, once per item. Without
-  // an index that is a sequential scan per tweet.
-  @@index([sourceUrl])
-  @@index([partner, sourceType, publishedAt])
   @@map("partner_content")
 }
 
