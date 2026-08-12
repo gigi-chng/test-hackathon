@@ -81,10 +81,6 @@
     {
       "path": "/api/cron/scan-news",
       "schedule": "0 16 * * *"
-    },
-    {
-      "path": "/api/cron/backfill-twitter",
-      "schedule": "0 11 * * *"
     }
   ]
 }
