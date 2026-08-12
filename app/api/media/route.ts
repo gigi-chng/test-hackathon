@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
   const results: { url?: string; status: string; error?: string }[] = []
 
   for (const raw of items) {
-    const it = raw as Record<string, string | string[] | undefined>
+    const it = raw as Record<string, string | string[] | boolean | undefined>
     const url = it.url as string | undefined
     const partner = it.partner as string | undefined
     const type = it.type as string | undefined
@@ -82,6 +82,8 @@ export async function POST(req: NextRequest) {
           topics: Array.isArray(it.topics) ? (it.topics as string[]) : [],
           notes: (it.notes as string) ?? null,
           status: "ready",
+          verified: it.verified === true || it.verified === "true",
+          verifiedNote: (it.verifiedNote as string) ?? null,
         },
       })
       results.push({ url, status: "added" })
@@ -97,4 +99,47 @@ export async function POST(req: NextRequest) {
     errors: results.filter(r => r.status === "error").length,
     results,
   })
+}
+
+// Flip verification on an existing row once a human has read the source.
+export async function PATCH(req: NextRequest) {
+  const auth = req.headers.get("authorization")
+  if (auth !== `Bearer ${process.env.CONTENT_API_KEY}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
+  }
+
+  const items = Array.isArray(body) ? body : [body]
+  const results: { url?: string; status: string }[] = []
+
+  for (const raw of items) {
+    const it = raw as { url?: string; verified?: boolean; verifiedNote?: string; delete?: boolean }
+    if (!it.url) { results.push({ status: "skipped" }); continue }
+
+    const row = await prisma.mediaAppearance.findFirst({ where: { url: it.url }, select: { id: true } })
+    if (!row) { results.push({ url: it.url, status: "not found" }); continue }
+
+    if (it.delete) {
+      await prisma.mediaAppearance.delete({ where: { id: row.id } })
+      results.push({ url: it.url, status: "deleted" })
+      continue
+    }
+
+    await prisma.mediaAppearance.update({
+      where: { id: row.id },
+      data: {
+        ...(it.verified !== undefined && { verified: it.verified }),
+        ...(it.verifiedNote !== undefined && { verifiedNote: it.verifiedNote }),
+      },
+    })
+    results.push({ url: it.url, status: "updated" })
+  }
+
+  return NextResponse.json({ ok: true, results })
 }

@@ -35,6 +35,9 @@
     },
     "app/api/cron/backfill-twitter/route.ts": {
       "maxDuration": 300
+    },
+    "app/api/cron/verify-media/route.ts": {
+      "maxDuration": 60
     }
   },
   "crons": [
@@ -81,6 +84,10 @@
     {
       "path": "/api/cron/scan-news",
       "schedule": "0 16 * * *"
+    },
+    {
+      "path": "/api/cron/verify-media",
+      "schedule": "0 14 * * 1"
     }
   ]
 }

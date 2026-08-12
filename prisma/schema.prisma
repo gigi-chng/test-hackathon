@@ -142,6 +142,13 @@ model MediaAppearance {
   processingJobId String?
   createdAt       DateTime  @default(now())
 
+  // Only true when someone has actually read the source and confirmed a
+  // partner or Slow Ventures is named in it. A search-engine summary saying
+  // so is not confirmation — Forbes turned out to name "Yoav Rechtman" and
+  // never mention the firm.
+  verified        Boolean   @default(false)
+  verifiedNote    String?
+
   @@map("media_appearances")
 }
 
