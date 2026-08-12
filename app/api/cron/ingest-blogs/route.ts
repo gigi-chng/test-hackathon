@@ -12,7 +12,9 @@ export async function GET(req: NextRequest) {
   }
 
   const only = req.nextUrl.searchParams.get("partner")
-  const limit = Math.min(parseInt(req.nextUrl.searchParams.get("limit") ?? "40"), 100)
+  // Cap raised to 200 so a repair pass can reach a full archive in one run —
+  // Yoni's 102 newsletters didn't fit under the old 100 limit.
+  const limit = Math.min(parseInt(req.nextUrl.searchParams.get("limit") ?? "40"), 200)
   // Re-reads stored posts and corrects dates/tags written by earlier versions
   // of the scraper. Off by default: it refetches every page.
   const repair = req.nextUrl.searchParams.get("repair") === "1"
