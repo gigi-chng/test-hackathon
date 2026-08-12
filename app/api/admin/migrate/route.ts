@@ -29,6 +29,11 @@ export async function GET(req: NextRequest) {
     ["partner_profiles.updatedAt",    `ALTER TABLE partner_profiles ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()`],
     ["partner_profiles.displayName nullable", `ALTER TABLE partner_profiles ALTER COLUMN "displayName" DROP NOT NULL`],
     ["partner_profiles.displayName default",  `ALTER TABLE partner_profiles ALTER COLUMN "displayName" SET DEFAULT ''`],
+    // Indexes have to come through here too. The build's prisma db push runs
+    // against DIRECT_URL, which points at the dev project, so schema changes
+    // made at build time never reach this database.
+    ["partner_content.sourceUrl idx", `CREATE INDEX IF NOT EXISTS "partner_content_sourceUrl_idx" ON partner_content("sourceUrl")`],
+    ["partner_content.lookup idx",    `CREATE INDEX IF NOT EXISTS "partner_content_partner_sourceType_publishedAt_idx" ON partner_content(partner, "sourceType", "publishedAt")`],
   ]
 
   for (const [name, sql] of migrations) {
