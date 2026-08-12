@@ -70,6 +70,8 @@ model PartnerContent {
   publishedAt DateTime?
   createdAt   DateTime  @default(now())
 
+  @@index([sourceUrl])
+  @@index([partner, sourceType, publishedAt])
   @@map("partner_content")
 }
 
