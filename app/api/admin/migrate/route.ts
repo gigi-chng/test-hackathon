@@ -7,6 +7,22 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
+  // ?inspect=1 reports what this database actually has, without changing it.
+  // Runs on DATABASE_URL, so it is a direct read of production.
+  if (req.nextUrl.searchParams.get("inspect") === "1") {
+    const indexes = await prisma.$queryRawUnsafe<{ indexname: string }[]>(
+      `SELECT indexname FROM pg_indexes WHERE tablename = 'partner_content' ORDER BY indexname`
+    )
+    const [counts] = await prisma.$queryRawUnsafe<{ rows: bigint }[]>(
+      `SELECT count(*) AS rows FROM partner_content`
+    )
+    return NextResponse.json({
+      ok: true,
+      rows: Number(counts.rows),
+      indexes: indexes.map(i => i.indexname),
+    })
+  }
+
   const results: string[] = []
 
   const migrations: [string, string][] = [
