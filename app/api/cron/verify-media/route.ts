@@ -34,12 +34,12 @@ export async function GET(req: NextRequest) {
 <td style="padding:6px 10px 6px 0;vertical-align:top">
   <a href="${m.url}">${m.title}</a>
   ${m.verifiedNote ? `<div style="color:#b00;font-size:12px;margin-top:3px">${m.verifiedNote}</div>` : ""}
-  <div style="margin-top:8px">
+  ${m.verifyToken ? `<div style="margin-top:8px">
     <a href="${base}/api/media/verify?token=${m.verifyToken}&action=confirm"
        style="background:#16a34a;color:#fff;text-decoration:none;padding:6px 14px;border-radius:6px;font-size:13px;margin-right:6px">Confirm</a>
     <a href="${base}/api/media/verify?token=${m.verifyToken}&action=reject"
        style="background:#dc2626;color:#fff;text-decoration:none;padding:6px 14px;border-radius:6px;font-size:13px">Reject</a>
-  </div>
+  </div>` : ""}
 </td>
 </tr>`
       )

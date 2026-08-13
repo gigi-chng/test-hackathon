@@ -49,6 +49,7 @@ export async function GET(req: NextRequest) {
     // against DIRECT_URL, which points at the dev project, so schema changes
     // made at build time never reach this database.
     ["partner_content.sourceUrl idx", `CREATE INDEX IF NOT EXISTS "partner_content_sourceUrl_idx" ON partner_content("sourceUrl")`],
+    ["media_appearances.verifyToken backfill", `UPDATE media_appearances SET "verifyToken" = gen_random_uuid()::text WHERE "verifyToken" IS NULL`],
     ["partner_content.lookup idx",    `CREATE INDEX IF NOT EXISTS "partner_content_partner_sourceType_publishedAt_idx" ON partner_content(partner, "sourceType", "publishedAt")`],
   ]
 

@@ -119,7 +119,7 @@ export async function PATCH(req: NextRequest) {
   const results: { url?: string; status: string }[] = []
 
   for (const raw of items) {
-    const it = raw as { url?: string; verified?: boolean; verifiedNote?: string; delete?: boolean }
+    const it = raw as { url?: string; newUrl?: string; verified?: boolean; verifiedNote?: string; delete?: boolean }
     if (!it.url) { results.push({ status: "skipped" }); continue }
 
     const row = await prisma.mediaAppearance.findFirst({ where: { url: it.url }, select: { id: true } })
@@ -134,6 +134,7 @@ export async function PATCH(req: NextRequest) {
     await prisma.mediaAppearance.update({
       where: { id: row.id },
       data: {
+        ...(it.newUrl && { url: it.newUrl }),
         ...(it.verified !== undefined && { verified: it.verified }),
         ...(it.verifiedNote !== undefined && { verifiedNote: it.verifiedNote }),
       },

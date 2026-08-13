@@ -151,7 +151,9 @@ model MediaAppearance {
   // Confirm/reject straight from the weekly email, same one-click token
   // pattern as post draft approvals. Rejected rows stay for the audit trail
   // but drop out of the reminder.
-  verifyToken     String    @unique @default(cuid())
+  // Optional because the table already had rows when this was added; the
+  // existing ones are backfilled by the admin migrate route.
+  verifyToken     String?   @unique @default(cuid())
   rejectedAt      DateTime?
 
   @@map("media_appearances")
