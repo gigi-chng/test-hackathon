@@ -72,6 +72,69 @@ async function embed(text: string): Promise<number[]> {
   return res.data[0].embedding
 }
 
+// ─── Forwarded press coverage ────────────────────────────────────────────────
+// Forward any article, podcast or mention with "coverage" at the front of the
+// subject and it lands in the media tracker, already verified — a human read it
+// and chose to forward it, which is exactly the bar we hold this to.
+const COVERAGE_SUBJECT = /^\s*(?:(?:re|fwd?)\s*:\s*)*coverage\b[:\-\s]*/i
+
+function isCoverageForward(subject: string): boolean {
+  return COVERAGE_SUBJECT.test(subject ?? "")
+}
+
+type CoverageFields = {
+  partner: string | null
+  type: string
+  show: string
+  title: string
+  url: string | null
+  publishedAt: string | null
+  topics: string[]
+  quote: string | null
+}
+
+// The forwarded chain is messy — headers, signatures, quoted replies. Let the
+// model pull the fields out rather than trying to regex a mail client's output.
+async function extractCoverage(subject: string, body: string): Promise<CoverageFields | null> {
+  try {
+    const res = await openai.chat.completions.create({
+      model: "gpt-4o",
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content: `You extract press coverage details from a forwarded email chain about a Slow Ventures partner.
+
+Partners and how they may be referred to:
+- "sam" = Sam Lessin
+- "will" = Will Quist
+- "yoni" = Yoni Rechtman
+- "megan" = Megan Lightcap
+
+Return JSON:
+{
+  "partner": "sam" | "will" | "yoni" | "megan" | null,
+  "type": "press" | "podcast" | "panel" | "newsletter" | "video" | "other",
+  "show": "outlet or show name, e.g. CNBC, Inc., Lenny's Podcast",
+  "title": "headline or episode title",
+  "url": "the single best link to the coverage itself, not a newsletter or unsubscribe link",
+  "publishedAt": "YYYY-MM-DD or null if not stated",
+  "topics": ["3-5 lowercase topic tags"],
+  "quote": "a verbatim quote from the partner if the email contains one, else null"
+}
+
+Rules: never invent a URL or a date. If the partner is unclear, return null for partner. Prefer the outlet's own domain over aggregators.`,
+        },
+        { role: "user", content: `Subject: ${subject}\n\n${body.slice(0, 12000)}` },
+      ],
+    })
+    return JSON.parse(res.choices[0].message.content ?? "{}") as CoverageFields
+  } catch (err) {
+    console.error("[inbound] coverage extraction failed:", err)
+    return null
+  }
+}
+
 async function rememberUnmatched(from: string, subject: string, text: string, receivedAt: string) {
   const value = JSON.stringify({ from, subject, text: text.slice(0, 2000), receivedAt })
   await prisma.appSetting.upsert({
@@ -120,6 +183,57 @@ export async function POST(req: NextRequest) {
   if (error || !email) {
     console.error(`[inbound] could not fetch ${emailId}:`, error)
     return NextResponse.json({ error: error?.message ?? "Fetch failed" }, { status: 502 })
+  }
+
+  // Coverage forwards are handled before newsletter ingestion — the subject
+  // prefix is the switch, so a forwarded article never lands in the content
+  // library as if the partner had written it.
+  if (isCoverageForward(email.subject ?? "")) {
+    const bodyText =
+      email.text ??
+      (email.html ? cheerio.load(email.html).text().replace(/\s+/g, " ").trim() : "")
+    const c = await extractCoverage(email.subject ?? "", bodyText)
+
+    if (!c?.url || !c.partner) {
+      await rememberUnmatched(email.from, email.subject, bodyText, email.created_at)
+      return NextResponse.json({
+        ok: true,
+        coverage: true,
+        stored: false,
+        reason: !c?.url ? "no article URL found in the forward" : "could not tell which partner",
+      })
+    }
+
+    const dupe = await prisma.mediaAppearance.findFirst({ where: { url: c.url }, select: { id: true } })
+    if (dupe) {
+      return NextResponse.json({ ok: true, coverage: true, stored: false, reason: "already tracked", url: c.url })
+    }
+
+    await prisma.mediaAppearance.create({
+      data: {
+        partner: c.partner,
+        type: c.type || "press",
+        show: c.show || "Unknown outlet",
+        title: c.title || email.subject || "Untitled",
+        url: c.url,
+        publishedAt: c.publishedAt ? new Date(c.publishedAt) : null,
+        topics: Array.isArray(c.topics) ? c.topics : [],
+        notes: c.quote ? `Quote: ${c.quote}` : null,
+        status: "ready",
+        // Forwarded by a human who already checked it, so it skips the queue.
+        verified: true,
+        verifiedNote: `Forwarded by ${email.from} on ${email.created_at?.slice(0, 10) ?? "unknown date"}`,
+      },
+    })
+
+    return NextResponse.json({
+      ok: true,
+      coverage: true,
+      stored: true,
+      partner: c.partner,
+      show: c.show,
+      url: c.url,
+    })
   }
 
   const partner = inferPartner(email.from, email.subject, email.html)
