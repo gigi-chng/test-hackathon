@@ -17,11 +17,12 @@ export async function GET(req: NextRequest) {
   }
 
   const unverified = await prisma.mediaAppearance.findMany({
-    where: { verified: false },
+    where: { verified: false, rejectedAt: null },
     orderBy: [{ publishedAt: { sort: "desc", nulls: "last" } }],
   })
   const verifiedCount = await prisma.mediaAppearance.count({ where: { verified: true } })
 
+  const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://slow-hackathon-xi.vercel.app"
   const to = process.env.REPORT_EMAIL
   if (to && process.env.RESEND_API_KEY) {
     const rows = unverified
@@ -33,6 +34,12 @@ export async function GET(req: NextRequest) {
 <td style="padding:6px 10px 6px 0;vertical-align:top">
   <a href="${m.url}">${m.title}</a>
   ${m.verifiedNote ? `<div style="color:#b00;font-size:12px;margin-top:3px">${m.verifiedNote}</div>` : ""}
+  <div style="margin-top:8px">
+    <a href="${base}/api/media/verify?token=${m.verifyToken}&action=confirm"
+       style="background:#16a34a;color:#fff;text-decoration:none;padding:6px 14px;border-radius:6px;font-size:13px;margin-right:6px">Confirm</a>
+    <a href="${base}/api/media/verify?token=${m.verifyToken}&action=reject"
+       style="background:#dc2626;color:#fff;text-decoration:none;padding:6px 14px;border-radius:6px;font-size:13px">Reject</a>
+  </div>
 </td>
 </tr>`
       )
@@ -40,7 +47,7 @@ export async function GET(req: NextRequest) {
 
     const html = unverified.length
       ? `<p>These media appearances are in the tracker but <strong>nobody has confirmed the partner or Slow Ventures is actually named in the source</strong>. Each one is either paywalled, blocks automated reading, or was found only via a search summary.</p>
-<p>Open each link, confirm we're mentioned, and reply with the ones that check out. Anything that doesn't should be deleted.</p>
+<p>Open each link and check whether we're actually named. Then hit <strong>Confirm</strong> or <strong>Reject</strong> below it — one click, no reply needed.</p>
 <table style="border-collapse:collapse;font-family:system-ui,sans-serif;font-size:14px">
 <tr style="text-align:left;border-bottom:1px solid #ddd">
 <th style="padding:6px 10px 6px 0">Partner</th><th style="padding:6px 10px 6px 0">Date</th>
