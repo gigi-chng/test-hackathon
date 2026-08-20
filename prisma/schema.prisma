@@ -91,6 +91,23 @@ model PartnerProfile {
   @@map("partner_profiles")
 }
 
+model Transcript {
+  id           String   @id @default(cuid())
+  title        String
+  source       String   @default("internal") // "more-or-less" | "partner-meeting" | "internal" | "other"
+  recordedAt   DateTime?
+  participants String[] // raw speaker labels found in the file
+  // partner key -> speaker label, as confirmed by a human. Auto-matching alone
+  // is unsafe: one episode had two Sams and two Scotts.
+  speakerMap   Json?
+  rawText      String
+  segmentCount Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@index([recordedAt])
+  @@map("transcripts")
+}
+
 model VideoLibrary {
   id         String   @id @default(cuid())
   partner    String
