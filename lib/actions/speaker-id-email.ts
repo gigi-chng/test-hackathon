@@ -9,6 +9,12 @@ import { PARTNERS, type Partner } from "@/lib/partners"
 
 const BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://slow-hackathon-xi.vercel.app"
 
+const LAST_SENT_KEY = "RIVERSIDE_DIGEST_SENT_AT"
+
+// One a day. Checked at 20h rather than 24h so a cron that fires slightly
+// earlier than the previous day's run doesn't silently skip a day.
+const MIN_GAP_HOURS = 20
+
 function esc(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -45,15 +51,26 @@ border-radius:6px;color:#111;text-decoration:none;font-size:13px">${esc(text)}</
  * Anything never identified simply never reaches the library, which is the
  * intended default rather than a backlog to clear.
  */
-export async function sendOutstandingSpeakers(): Promise<{
+export async function sendOutstandingSpeakers(opts: { force?: boolean } = {}): Promise<{
   named: number
   unnamedRecordings: number
   recordings: number
   sent: boolean
+  skipped?: string
 }> {
   const to = process.env.REPORT_EMAIL
   const empty = { named: 0, unnamedRecordings: 0, recordings: 0, sent: false }
   if (!to || !process.env.RESEND_API_KEY) return empty
+
+  // Rate limited on the send, not on the cron schedule, so a manual run or a
+  // retried invocation can't turn one day's list into several emails.
+  const lastSent = await prisma.appSetting.findUnique({ where: { key: LAST_SENT_KEY } })
+  if (!opts.force && lastSent?.value) {
+    const hours = (Date.now() - new Date(lastSent.value).getTime()) / 3_600_000
+    if (hours < MIN_GAP_HOURS) {
+      return { ...empty, skipped: `already sent ${hours.toFixed(1)}h ago` }
+    }
+  }
 
   const rows = await prisma.transcript.findMany({
     where: { status: "pending" },
@@ -199,6 +216,12 @@ ${anonBlocks.join("")}`
   await prisma.transcript.updateMany({
     where: { status: "pending", speakerAlertAt: null },
     data: { speakerAlertAt: new Date() },
+  })
+
+  await prisma.appSetting.upsert({
+    where: { key: LAST_SENT_KEY },
+    create: { key: LAST_SENT_KEY, value: new Date().toISOString() },
+    update: { value: new Date().toISOString() },
   })
 
   return { named: byName.size, unnamedRecordings: anonBlocks.length, recordings: touched, sent: true }

@@ -109,7 +109,11 @@ export async function GET(req: NextRequest) {
   // per recording — a backfill of 47 would otherwise mean a burst of them.
   let outstanding: Awaited<ReturnType<typeof sendOutstandingSpeakers>> | null = null
   try {
-    outstanding = await sendOutstandingSpeakers()
+    // ?digest=force re-sends within the daily window, for when the list is
+    // wanted on demand rather than waiting for tomorrow.
+    outstanding = await sendOutstandingSpeakers({
+      force: req.nextUrl.searchParams.get("digest") === "force",
+    })
   } catch (err) {
     console.error("[sync-riverside] speaker-id email failed", err)
     result.errors.push(
