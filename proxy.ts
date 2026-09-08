@@ -3,7 +3,7 @@ import { auth } from "@/auth"
 // "Public" here means the session cookie isn't required — every one of these
 // API routes still checks a bearer token of its own.
 // /api/media covers the token-authed confirm/reject links at /api/media/verify
-const publicRoutes = ["/", "/sign-in", "/sign-up", "/api/auth", "/api/agent/cron", "/api/agent/approve", "/podcast-tools", "/api/quote-card", "/api/cron", "/api/content", "/api/media", "/api/profiles", "/api/admin", "/api/inbound"]
+const publicRoutes = ["/", "/sign-in", "/sign-up", "/api/auth", "/api/agent/cron", "/api/agent/approve", "/podcast-tools", "/api/quote-card", "/api/cron", "/api/content", "/api/media", "/api/riverside/identify", "/api/profiles", "/api/admin", "/api/inbound"]
 const ALLOWED_EMAILS = ["gigi@slow.co"]
 
 export default auth((req) => {

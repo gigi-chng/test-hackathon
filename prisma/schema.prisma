@@ -104,8 +104,41 @@ model Transcript {
   segmentCount Int      @default(0)
   createdAt    DateTime @default(now())
 
+  // Riverside sync. "confirmed" is the default so the rows that predate the
+  // sync don't suddenly show up in the review queue.
+  status        String  @default("confirmed") // "pending" | "confirmed"
+  riversideId   String? @unique // recording_id, so a re-run doesn't duplicate
+  sourceProject String? // Riverside project/studio name the recording came from
+  // Unnamed speakers get their own audio track in Riverside, so we keep
+  // { speakerLabel: fileId } and can stream just that person to identify them.
+  speakerMedia  Json?
+  // Stamped once the "who is this?" email goes out, so the daily cron doesn't
+  // re-send the same request every morning.
+  speakerAlertAt DateTime?
+  // One-click speaker identification from that email. The token is the
+  // credential, same as MediaAppearance.verifyToken. Optional because rows
+  // already existed when this was added.
+  identifyToken   String? @unique @default(cuid())
+  // { speakerLabel: partnerKey | "none" } — accumulated one tap at a time,
+  // since a recording usually needs more than one answer.
+  identifyChoices Json?
+
   @@index([recordedAt])
+  @@index([status])
   @@map("transcripts")
+}
+
+// Remembered speaker label -> partner decisions, so the review queue asks about
+// each new name once instead of every episode. partner: null means "confirmed
+// not a partner" (a guest), which is just as useful to remember.
+model SpeakerAlias {
+  id        String   @id @default(cuid())
+  label     String   @unique // lowercased raw label
+  display   String // the label as it actually appeared
+  partner   String?
+  createdAt DateTime @default(now())
+
+  @@map("speaker_aliases")
 }
 
 model VideoLibrary {

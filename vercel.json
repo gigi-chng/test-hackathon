@@ -38,6 +38,9 @@
     },
     "app/api/cron/verify-media/route.ts": {
       "maxDuration": 60
+    },
+    "app/api/cron/sync-riverside/route.ts": {
+      "maxDuration": 300
     }
   },
   "crons": [
@@ -88,6 +91,10 @@
     {
       "path": "/api/cron/verify-media",
       "schedule": "0 14 * * 1"
+    },
+    {
+      "path": "/api/cron/sync-riverside",
+      "schedule": "0 12 * * *"
     }
   ]
 }

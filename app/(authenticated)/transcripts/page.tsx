@@ -13,8 +13,10 @@ import {
 } from "lucide-react"
 import {
   detectSpeakers, ingestTranscript, listTranscripts, deleteTranscript,
-  type DetectedSpeaker,
+  listPendingTranscripts,
+  type DetectedSpeaker, type PendingTranscript,
 } from "@/lib/actions/transcripts"
+import { RiversideSettings, PendingQueue } from "./riverside"
 
 const PARTNER_KEYS = ["sam", "will", "yoni", "megan"] as const
 const PARTNER_NAMES: Record<string, string> = {
@@ -40,10 +42,20 @@ export default function TranscriptsPage() {
   const [map, setMap] = useState<Record<string, string>>({})
   const [result, setResult] = useState<{ stored: Record<string, number>; skipped: string[] } | null>(null)
   const [rows, setRows] = useState<Row[]>([])
+  const [queue, setQueue] = useState<PendingTranscript[]>([])
   const [pending, start] = useTransition()
   const [analyzing, setAnalyzing] = useState(false)
 
-  useEffect(() => { listTranscripts().then(setRows) }, [])
+  async function refresh() {
+    const [confirmed, waiting] = await Promise.all([
+      listTranscripts(),
+      listPendingTranscripts(),
+    ])
+    setRows(confirmed)
+    setQueue(waiting)
+  }
+
+  useEffect(() => { refresh() }, [])
 
   async function analyze() {
     if (!rawText.trim()) return
@@ -65,7 +77,7 @@ export default function TranscriptsPage() {
     start(async () => {
       const res = await ingestTranscript({ title, source, recordedAt: recordedAt || undefined, rawText, speakerMap: map })
       setResult({ stored: res.stored, skipped: res.skipped })
-      setRows(await listTranscripts())
+      await refresh()
       setTitle(""); setRawText(""); setRecordedAt(""); setSpeakers(null); setMap({})
     })
   }
@@ -82,11 +94,17 @@ export default function TranscriptsPage() {
         <div className="mb-8">
           <h1 className="text-2xl font-semibold tracking-tight">Transcripts</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Drop in a team recording. Each partner&apos;s spoken segments are split out and added to
-            their own library, so their quotes and points of view feed the voice profiles.
+            Recordings sync from Riverside automatically. Each partner&apos;s spoken segments are
+            split out and added to their own library, so their quotes and points of view feed
+            the voice profiles. You can still paste one in by hand below.
           </p>
         </div>
 
+        <RiversideSettings onSynced={refresh} />
+
+        <PendingQueue rows={queue} onChange={refresh} />
+
+        <h2 className="text-sm font-medium mt-10 mb-3">Paste one in</h2>
         <Card className="p-6 space-y-5">
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="sm:col-span-2 space-y-2">
@@ -233,7 +251,7 @@ export default function TranscriptsPage() {
                     )}
                   </div>
                   <Button variant="ghost" size="sm"
-                    onClick={() => start(async () => { await deleteTranscript(r.id); setRows(await listTranscripts()) })}
+                    onClick={() => start(async () => { await deleteTranscript(r.id); await refresh() })}
                     title="Delete transcript and everything it added to the partner libraries">
                     <Trash2 className="h-4 w-4" />
                   </Button>

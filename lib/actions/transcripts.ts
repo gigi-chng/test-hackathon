@@ -5,6 +5,12 @@ import { prisma } from "@/lib/db/prisma"
 import { revalidatePath } from "next/cache"
 import { PARTNERS, type Partner } from "@/lib/partners"
 import { generateTags } from "@/lib/ai/tags"
+import {
+  parseSegments,
+  suggestPartner,
+  chunk,
+  isGenericLabel,
+} from "@/lib/transcript-parse"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
@@ -18,62 +24,6 @@ async function embed(text: string): Promise<number[]> {
 
 // ─── Speaker parsing ─────────────────────────────────────────────────────────
 
-export type Segment = { speaker: string; text: string }
-
-// Common exports we see: Riverside/Zoom "Name (00:00.000)", plain "Name:",
-// and bracketed "[Name]". Timestamps are stripped either way.
-const SPEAKER_PATTERNS: RegExp[] = [
-  /^([A-Za-z][\w .'’\-()]{0,48}?)\s*\((\d{1,2}:\d{2}(?:[.:]\d{1,3})?)\)\s*$/,
-  /^\[?([A-Za-z][\w .'’\-]{0,48}?)\]?\s*:\s*(.*)$/,
-]
-
-function parseSegments(raw: string): Segment[] {
-  const lines = raw.split(/\r?\n/)
-  const segments: Segment[] = []
-  let current: Segment | null = null
-
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (!trimmed) continue
-
-    // "Name (00:00.000)" on its own line — speech follows on later lines
-    const withTime = trimmed.match(SPEAKER_PATTERNS[0])
-    if (withTime) {
-      if (current?.text.trim()) segments.push(current)
-      current = { speaker: withTime[1].trim(), text: "" }
-      continue
-    }
-
-    // "Name: speech"
-    const inline = trimmed.match(SPEAKER_PATTERNS[1])
-    if (inline && inline[1].split(/\s+/).length <= 4 && inline[2] !== undefined) {
-      if (current?.text.trim()) segments.push(current)
-      current = { speaker: inline[1].trim(), text: inline[2].trim() }
-      continue
-    }
-
-    if (current) current.text += (current.text ? " " : "") + trimmed
-  }
-  if (current?.text.trim()) segments.push(current)
-
-  return segments.filter(s => s.text.trim().length > 0)
-}
-
-// Suggest a partner for a speaker label, but never act on it unsupervised.
-function suggestPartner(speaker: string): Partner | null {
-  const s = speaker.toLowerCase()
-  if (/lessin/.test(s)) return "sam"
-  if (/quist/.test(s)) return "will"
-  if (/rechtman/.test(s)) return "yoni"
-  if (/lightcap/.test(s)) return "megan"
-  // Bare first names are deliberately weaker signals — an episode can have two
-  // people sharing one, so these are suggestions a human still confirms.
-  if (/^sam\b/.test(s)) return "sam"
-  if (/^will\b/.test(s)) return "will"
-  if (/^yoni\b/.test(s)) return "yoni"
-  if (/^megan\b/.test(s)) return "megan"
-  return null
-}
 
 export type DetectedSpeaker = {
   label: string
@@ -114,47 +64,22 @@ export async function detectSpeakers(raw: string): Promise<{
 
 // ─── Ingest ──────────────────────────────────────────────────────────────────
 
-// Long monologues get split so one embedding doesn't have to represent an hour
-// of talking. Split on segment boundaries, never mid-sentence.
-function chunk(texts: string[], target = 1800): string[] {
-  const out: string[] = []
-  let buf = ""
-  for (const t of texts) {
-    if (buf && buf.length + t.length > target) {
-      out.push(buf)
-      buf = t
-    } else {
-      buf = buf ? `${buf} ${t}` : t
-    }
-  }
-  if (buf.trim()) out.push(buf)
-  return out.filter(c => c.trim().length >= 200)
-}
-
-export async function ingestTranscript(input: {
+/**
+ * Split a stored transcript into per-partner passages and write them to the
+ * content library. Shared by the paste flow and the Riverside review queue so
+ * both produce identical rows.
+ */
+async function extractPassages(record: {
+  id: string
   title: string
-  source: string
-  recordedAt?: string
   rawText: string
-  /** partner key -> speaker label, confirmed in the UI */
-  speakerMap: Record<string, string>
-}): Promise<{ transcriptId: string; stored: Record<string, number>; skipped: string[] }> {
-  const segments = parseSegments(input.rawText)
+  recordedAt: Date | null
+}, speakerMap: Record<string, string>) {
+  const segments = parseSegments(record.rawText)
   const stored: Record<string, number> = {}
   const skipped: string[] = []
 
-  const record = await prisma.transcript.create({
-    data: {
-      title: input.title,
-      source: input.source,
-      recordedAt: input.recordedAt ? new Date(input.recordedAt) : null,
-      participants: [...new Set(segments.map(s => s.speaker))],
-      speakerMap: input.speakerMap,
-      rawText: input.rawText,
-    },
-  })
-
-  for (const [partner, label] of Object.entries(input.speakerMap)) {
+  for (const [partner, label] of Object.entries(speakerMap)) {
     if (!label || !(partner in PARTNERS)) continue
 
     const spoken = segments.filter(s => s.speaker === label).map(s => s.text)
@@ -174,12 +99,12 @@ export async function ingestTranscript(input: {
           // Own sourceType so spoken material stays separable from writing.
           sourceType: "transcript",
           sourceUrl,
-          title: `${input.title} — ${PARTNERS[partner as Partner].displayName}`,
+          title: `${record.title} — ${PARTNERS[partner as Partner].displayName}`,
           content: text,
           embedding,
           tags,
           manual: true,
-          publishedAt: input.recordedAt ? new Date(input.recordedAt) : null,
+          publishedAt: record.recordedAt,
         },
       })
       n += 1
@@ -189,16 +114,131 @@ export async function ingestTranscript(input: {
 
   await prisma.transcript.update({
     where: { id: record.id },
-    data: { segmentCount: Object.values(stored).reduce((a, b) => a + b, 0) },
+    data: {
+      speakerMap,
+      status: "confirmed",
+      segmentCount: Object.values(stored).reduce((a, b) => a + b, 0),
+    },
   })
 
   revalidatePath("/transcripts")
   revalidatePath("/content-library")
-  return { transcriptId: record.id, stored, skipped }
+  return { stored, skipped }
+}
+
+export async function ingestTranscript(input: {
+  title: string
+  source: string
+  recordedAt?: string
+  rawText: string
+  /** partner key -> speaker label, confirmed in the UI */
+  speakerMap: Record<string, string>
+}): Promise<{ transcriptId: string; stored: Record<string, number>; skipped: string[] }> {
+  const segments = parseSegments(input.rawText)
+
+  const record = await prisma.transcript.create({
+    data: {
+      title: input.title,
+      source: input.source,
+      recordedAt: input.recordedAt ? new Date(input.recordedAt) : null,
+      participants: [...new Set(segments.map(s => s.speaker))],
+      speakerMap: input.speakerMap,
+      rawText: input.rawText,
+      status: "confirmed",
+    },
+  })
+
+  const result = await extractPassages(record, input.speakerMap)
+  await rememberAliases(input.speakerMap, record.participants)
+
+  return { transcriptId: record.id, ...result }
+}
+
+/**
+ * Confirm a transcript the Riverside sync pulled in but couldn't map on its
+ * own. Same extraction as the paste flow, plus the decisions get remembered so
+ * the next episode with these names doesn't ask again.
+ */
+export async function confirmTranscript(
+  id: string,
+  speakerMap: Record<string, string>
+): Promise<{ stored: Record<string, number>; skipped: string[] }> {
+  const record = await prisma.transcript.findUnique({ where: { id } })
+  if (!record) throw new Error("Transcript not found")
+  if (record.status === "confirmed") {
+    throw new Error("Already confirmed — delete it first to redo the mapping")
+  }
+
+  const result = await extractPassages(record, speakerMap)
+  await rememberAliases(speakerMap, record.participants)
+  return result
+}
+
+// ─── Remembered speaker labels ───────────────────────────────────────────────
+
+/**
+ * Record what a human decided about each label in this transcript: mapped
+ * labels point at a partner, everything else present is a guest. Both are
+ * worth keeping — "Marc Andreessen is not one of our partners" saves a
+ * question next time too.
+ */
+async function rememberAliases(
+  speakerMap: Record<string, string>,
+  allLabels: string[]
+) {
+  const byLabel = new Map<string, string | null>()
+  for (const label of allLabels) byLabel.set(label, null)
+  for (const [partner, label] of Object.entries(speakerMap)) {
+    if (label && partner in PARTNERS) byLabel.set(label, partner)
+  }
+
+  for (const [display, partner] of byLabel) {
+    const label = display.toLowerCase().trim()
+    if (!label) continue
+    // "Speaker 1" is a position in one recording, not a person. Remembering it
+    // would attribute the next recording's Speaker 1 to whoever this one was.
+    if (isGenericLabel(label)) continue
+    await prisma.speakerAlias.upsert({
+      where: { label },
+      create: { label, display, partner },
+      update: { partner, display },
+    })
+  }
+}
+
+/** Look up remembered decisions for a set of labels. */
+export async function resolveAliases(labels: string[]): Promise<{
+  /** partner key -> label, for labels we've seen mapped before */
+  speakerMap: Record<string, string>
+  /** labels we have no decision for */
+  unknown: string[]
+}> {
+  const normalized = labels.map(l => l.toLowerCase().trim()).filter(Boolean)
+  const known = await prisma.speakerAlias.findMany({
+    where: { label: { in: normalized } },
+  })
+  const byLabel = new Map(known.map(a => [a.label, a.partner]))
+
+  const speakerMap: Record<string, string> = {}
+  const unknown: string[] = []
+
+  for (const label of labels) {
+    const key = label.toLowerCase().trim()
+    // Positional labels are never auto-resolved, however often they appear.
+    if (isGenericLabel(key) || !byLabel.has(key)) {
+      unknown.push(label)
+      continue
+    }
+    const partner = byLabel.get(key)
+    if (partner) speakerMap[partner] = label
+  }
+
+  return { speakerMap, unknown }
 }
 
 export async function listTranscripts() {
   return prisma.transcript.findMany({
+    where: { status: "confirmed" },
     orderBy: [{ recordedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
     select: {
       id: true,
@@ -209,8 +249,82 @@ export async function listTranscripts() {
       speakerMap: true,
       segmentCount: true,
       createdAt: true,
+      sourceProject: true,
+      riversideId: true,
     },
   })
+}
+
+export type PendingTranscript = {
+  id: string
+  title: string
+  source: string
+  recordedAt: Date | null
+  sourceProject: string | null
+  words: number
+  speakers: DetectedSpeaker[]
+  /** partner -> label, pre-filled from remembered aliases and name suggestions */
+  seeded: Record<string, string>
+  unlabeled: boolean
+  /** Labels are positional ("Speaker 1"), so the reviewer has to listen. */
+  anonymous: boolean
+  /** Speaker labels with an isolated audio track available to play. */
+  audioLabels: string[]
+}
+
+/**
+ * Recordings the sync pulled in but wouldn't attribute on its own. Each one
+ * arrives with the mapping pre-filled as far as it can be trusted; the human
+ * step is confirming it, not typing it.
+ */
+export async function listPendingTranscripts(): Promise<PendingTranscript[]> {
+  const rows = await prisma.transcript.findMany({
+    where: { status: "pending" },
+    orderBy: [{ recordedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+  })
+
+  const out: PendingTranscript[] = []
+
+  for (const row of rows) {
+    const detected = await detectSpeakers(row.rawText)
+    const { speakerMap: remembered } = await resolveAliases(
+      detected.speakers.map(s => s.label)
+    )
+
+    // Answers already tapped in the "who is this?" email outrank everything —
+    // otherwise the dropdowns would look empty after answering by email.
+    const tapped: Record<string, string> = {}
+    for (const [label, partner] of Object.entries(
+      (row.identifyChoices ?? {}) as Record<string, string>
+    )) {
+      if (partner && partner !== "none") tapped[partner] = label
+    }
+
+    // Remembered decisions next; first-name suggestions only fill the gaps.
+    const seeded: Record<string, string> = { ...remembered, ...tapped }
+    for (const s of detected.speakers) {
+      if (!s.suggested) continue
+      if (seeded[s.suggested]) continue
+      if (Object.values(seeded).includes(s.label)) continue
+      seeded[s.suggested] = s.label
+    }
+
+    out.push({
+      id: row.id,
+      title: row.title,
+      source: row.source,
+      recordedAt: row.recordedAt,
+      sourceProject: row.sourceProject,
+      words: row.rawText.split(/\s+/).filter(Boolean).length,
+      speakers: detected.speakers,
+      seeded,
+      unlabeled: detected.unlabeled,
+      anonymous: detected.speakers.some(s => isGenericLabel(s.label)),
+      audioLabels: Object.keys((row.speakerMedia ?? {}) as Record<string, string>),
+    })
+  }
+
+  return out
 }
 
 export async function deleteTranscript(id: string) {
