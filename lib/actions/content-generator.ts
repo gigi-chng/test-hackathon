@@ -231,7 +231,10 @@ Return ONLY a JSON array of strings: ["phrase1", "phrase2", "phrase3"]`,
 
   // ── 5. Get partner long-form POV (blog, newsletter, podcast) ─────────────────
   const povContent = await prisma.partnerContent.findMany({
-    where: { partner, sourceType: { in: ["blog", "newsletter", "podcast"] } },
+    // "transcript" belongs here: it is what a partner actually said out loud,
+    // which is point of view in the purest form. It was missed when spoken
+    // material was first added, so drafts were shaped only by writing.
+    where: { partner, sourceType: { in: ["blog", "newsletter", "podcast", "transcript"] } },
     orderBy: { createdAt: "desc" },
     take: 5,
     select: { content: true, sourceType: true, title: true },

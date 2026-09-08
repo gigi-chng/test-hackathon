@@ -19,6 +19,7 @@ export default function Home() {
               <Link href="/tracker" className="text-muted-foreground hover:text-foreground">Tracker</Link>
               <Link href="/content-library" className="text-muted-foreground hover:text-foreground">Content Library</Link>
               <Link href="/transcripts" className="text-muted-foreground hover:text-foreground">Transcripts</Link>
+              <Link href="/reactions" className="text-muted-foreground hover:text-foreground">Team Reactions</Link>
               <Link href="/partner-profiles" className="text-muted-foreground hover:text-foreground">Partner Profiles</Link>
             </div>
             <AuthButton />
