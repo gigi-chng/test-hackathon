@@ -18,8 +18,12 @@ export default auth((req) => {
     return Response.redirect(signInUrl)
   }
 
-  // If logged in but not on the allowlist, redirect to sign-in
-  if (req.auth && !isPublic && !ALLOWED_EMAILS.includes(req.auth.user?.email ?? "")) {
+  // If logged in but not on the allowlist, redirect to sign-in.
+  // Compared lowercased: sign-up doesn't normalise the address, so an account
+  // created as "Gigi@slow.co" authenticated fine and then got bounced straight
+  // back here, which is indistinguishable from a wrong password.
+  const email = (req.auth?.user?.email ?? "").toLowerCase()
+  if (req.auth && !isPublic && !ALLOWED_EMAILS.includes(email)) {
     return Response.redirect(new URL("/sign-in", req.nextUrl.origin))
   }
 })
