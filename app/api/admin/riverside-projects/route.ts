@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { listRiversideProjects, setSelectedProjects } from "@/lib/actions/riverside-sync"
+import { prisma } from "@/lib/db/prisma"
+import { detectSpeakers, resolveAliases } from "@/lib/actions/transcripts"
 
 export const maxDuration = 60
 
@@ -21,6 +23,55 @@ export async function GET(req: NextRequest) {
   const auth = req.headers.get("authorization")
   if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  // ?status=1 reports the review queue without changing anything, so the
+  // state of production is checkable without exporting its credentials.
+  if (req.nextUrl.searchParams.get("status") === "1") {
+    const [pending, confirmed, aliases, passages] = await Promise.all([
+      prisma.transcript.findMany({
+        where: { status: "pending" },
+        select: { id: true, title: true, rawText: true, identifyChoices: true },
+      }),
+      prisma.transcript.count({ where: { status: "confirmed", riversideId: { not: null } } }),
+      prisma.speakerAlias.findMany({ select: { display: true, partner: true } }),
+      prisma.partnerContent.count({ where: { sourceType: "transcript" } }),
+    ])
+
+    const stuck: { title: string; reason: string }[] = []
+    let awaitingAnswers = 0
+
+    for (const row of pending) {
+      const detected = await detectSpeakers(row.rawText)
+      const choices = (row.identifyChoices ?? {}) as Record<string, string>
+      if (detected.unlabeled) {
+        stuck.push({ title: row.title.slice(0, 70), reason: "no speaker labels" })
+        continue
+      }
+      const { unknown } = await resolveAliases(detected.speakers.map(s => s.label))
+      const undecided = unknown.filter(l => !(l in choices))
+      if (undecided.length > 0) { awaitingAnswers += 1; continue }
+
+      // Fully answered but still pending means something blocked the sort.
+      const seen = new Map<string, string>()
+      let clash: string | null = null
+      for (const [label, pick] of Object.entries(choices)) {
+        if (pick === "none") continue
+        if (seen.has(pick)) clash = `${pick} claimed by "${seen.get(pick)}" and "${label}"`
+        seen.set(pick, label)
+      }
+      stuck.push({ title: row.title.slice(0, 70), reason: clash ?? "answered, awaiting next sweep" })
+    }
+
+    return NextResponse.json({
+      ok: true,
+      pending: pending.length,
+      awaitingAnswers,
+      stuck,
+      confirmed,
+      passagesInLibrary: passages,
+      aliases: aliases.map(a => `${a.display} = ${a.partner ?? "not a partner"}`),
+    })
   }
 
   const res = await listRiversideProjects()
