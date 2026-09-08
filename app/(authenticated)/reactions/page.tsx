@@ -6,12 +6,15 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
-import { ArrowLeft, Loader2, Search, Mic, FileText, ExternalLink } from "lucide-react"
+import { ArrowLeft, Loader2, Search, Mic, FileText, ExternalLink, PenLine, AlertTriangle } from "lucide-react"
 import {
   findReactions,
   getSourceTypes,
+  generatePov,
   type PartnerReaction,
+  type Pov,
 } from "@/lib/actions/reactions"
+import type { Partner } from "@/lib/partners"
 
 const TYPE_LABEL: Record<string, string> = {
   tweet: "tweet",
@@ -31,6 +34,8 @@ export default function ReactionsPage() {
   } | null>(null)
   const [types, setTypes] = useState<{ sourceType: string; count: number }[]>([])
   const [excluded, setExcluded] = useState<string[]>([])
+  const [povs, setPovs] = useState<Record<string, Pov>>({})
+  const [drafting, setDrafting] = useState<string | null>(null)
   const [pending, start] = useTransition()
 
   useEffect(() => { getSourceTypes().then(setTypes) }, [])
@@ -39,10 +44,21 @@ export default function ReactionsPage() {
     if (text.trim().length < 20) return
     start(async () => {
       const include = types.map(t => t.sourceType).filter(t => !excluded.includes(t))
+      setPovs({})
       setResult(await findReactions(text, {
         sourceTypes: include.length === types.length ? undefined : include,
       }))
     })
+  }
+
+  async function draft(partner: Partner) {
+    setDrafting(partner)
+    try {
+      const pov = await generatePov(text, partner)
+      setPovs(prev => ({ ...prev, [partner]: pov }))
+    } finally {
+      setDrafting(null)
+    }
   }
 
   function toggleType(t: string) {
@@ -59,9 +75,9 @@ export default function ReactionsPage() {
         <div className="mb-8">
           <h1 className="text-2xl font-semibold tracking-tight">Team reactions</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Paste a post and see what the team has already said about it — writing and
-            spoken material from recordings, ranked by how close it is. Everything shown is
-            something they actually said; nothing here is generated.
+            Paste a post to see what the team has already said about it, then draft the
+            position that follows from it — in their voice, argued only from their own past
+            work, with every claim cited back to the piece it came from.
           </p>
         </div>
 
@@ -129,7 +145,13 @@ export default function ReactionsPage() {
                     No material close enough to this to be worth showing.
                   </p>
                 ) : (
-                  <ul className="space-y-3">
+                  <>
+                    <PovBlock
+                      pov={povs[r.partner]}
+                      drafting={drafting === r.partner}
+                      onDraft={() => draft(r.partner)}
+                    />
+                    <ul className="space-y-3">
                     {r.matches.map((m, i) => (
                       <li key={i} className="border-l-2 border-muted pl-3">
                         <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground mb-1">
@@ -151,14 +173,93 @@ export default function ReactionsPage() {
                         </div>
                         <p className="text-sm">{m.excerpt}…</p>
                       </li>
-                    ))}
-                  </ul>
+                      ))}
+                    </ul>
+                  </>
                 )}
               </Card>
             ))}
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function PovBlock({
+  pov,
+  drafting,
+  onDraft,
+}: {
+  pov?: Pov
+  drafting: boolean
+  onDraft: () => void
+}) {
+  if (!pov) {
+    return (
+      <Button size="sm" variant="secondary" onClick={onDraft} disabled={drafting} className="mb-4">
+        {drafting
+          ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Working out their position</>
+          : <><PenLine className="h-4 w-4 mr-2" />Draft their POV</>}
+      </Button>
+    )
+  }
+
+  // Refused rather than invented. Shown as its own state so a thin evidence
+  // base doesn't get mistaken for a considered position.
+  if (!pov.enoughBasis) {
+    return (
+      <div className="mb-4 flex gap-3 rounded-md border border-amber-500/40 bg-amber-500/5 p-4 text-sm">
+        <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+        <div>
+          <p className="font-medium">Not enough of their own material to argue from</p>
+          <p className="text-muted-foreground mt-1">{pov.note}</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mb-5 rounded-md border bg-muted/30 p-4 space-y-3">
+      <p className="text-[15px] leading-relaxed font-medium">{pov.thesis}</p>
+
+      <div>
+        <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Why</p>
+        <p className="text-sm leading-relaxed">{pov.argument}</p>
+      </div>
+
+      <div>
+        <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
+          Cuts against
+        </p>
+        <p className="text-sm leading-relaxed">{pov.contrarian}</p>
+      </div>
+
+      {pov.rootedIn.length > 0 && (
+        <div className="border-t pt-3">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
+            Built from — the bracketed numbers above
+          </p>
+          <ul className="space-y-1.5">
+            {pov.rootedIn.map(m => (
+              <li key={m.n} className="text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">[{m.n}]</span>{" "}
+                {TYPE_LABEL[m.sourceType] ?? m.sourceType}
+                {m.title && ` · ${m.title}`}
+                {m.publishedAt && ` · ${new Date(m.publishedAt).toLocaleDateString()}`}
+                {m.sourceUrl && !m.sourceUrl.startsWith("transcript:") && (
+                  <a href={m.sourceUrl} target="_blank" rel="noopener noreferrer"
+                    className="ml-1 inline-flex hover:text-foreground">
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {pov.note && <p className="text-xs text-amber-600">{pov.note}</p>}
     </div>
   )
 }
