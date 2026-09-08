@@ -17,13 +17,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        const email = credentials.email as string
+        // Trimmed because mobile keyboards like to append a space, and matched
+        // case-insensitively because sign-up stores whatever was typed —
+        // signing up as "gigi@" and back in as "Gigi@" was a dead end that
+        // reported itself as a wrong password.
+        const email = (credentials.email as string)?.trim()
         const password = credentials.password as string
 
         if (!email || !password) return null
 
-        const user = await prisma.user.findUnique({
-          where: { email },
+        const user = await prisma.user.findFirst({
+          where: { email: { equals: email, mode: "insensitive" } },
         })
 
         if (!user?.password) return null
