@@ -176,21 +176,35 @@ async function expandSelection(
  */
 export async function resolvePendingTranscripts(
   limit = 12
-): Promise<{ resolved: number; stillPending: number; errors: string[] }> {
+): Promise<{
+  resolved: number
+  unlabeledSkipped: number
+  stillPending: number
+  errors: string[]
+}> {
   const rows = await prisma.transcript.findMany({
     where: { status: "pending" },
     orderBy: { recordedAt: "desc" },
   })
 
   let resolved = 0
+  let unlabeledSkipped = 0
   const errors: string[] = []
 
   for (const row of rows) {
-    if (resolved >= limit) break
+    if (resolved + unlabeledSkipped >= limit) break
 
     try {
       const detected = await detectSpeakers(row.rawText)
-      if (detected.unlabeled) continue
+
+      // No speaker labels at all, so there is nobody to identify and never
+      // will be. Close it out with nothing saved rather than leaving it in a
+      // queue asking a question that can't be answered.
+      if (detected.unlabeled) {
+        await confirmTranscript(row.id, {})
+        unlabeledSkipped += 1
+        continue
+      }
 
       const labels = detected.speakers.map(s => s.label)
       const choices = (row.identifyChoices ?? {}) as Record<string, string>
@@ -217,8 +231,8 @@ export async function resolvePendingTranscripts(
   }
 
   const stillPending = await prisma.transcript.count({ where: { status: "pending" } })
-  if (resolved > 0) revalidatePath("/transcripts")
-  return { resolved, stillPending, errors }
+  if (resolved > 0 || unlabeledSkipped > 0) revalidatePath("/transcripts")
+  return { resolved, unlabeledSkipped, stillPending, errors }
 }
 
 // ─── Sync ────────────────────────────────────────────────────────────────────

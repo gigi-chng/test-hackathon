@@ -95,9 +95,11 @@ export async function GET(req: NextRequest) {
   // Recordings already in the queue may have become resolvable since the last
   // run, as names get confirmed. Sweep those before asking about anything new.
   let retroSorted = 0
+  let unlabeledSkipped = 0
   try {
     const swept = await resolvePendingTranscripts()
     retroSorted = swept.resolved
+    unlabeledSkipped = swept.unlabeledSkipped
     result.errors.push(...swept.errors)
   } catch (err) {
     console.error("[sync-riverside] pending sweep failed", err)
@@ -117,5 +119,5 @@ export async function GET(req: NextRequest) {
 
   await report(result, sinceDays, limit)
 
-  return NextResponse.json({ ok: !result.authFailed, ...result, retroSorted, outstanding })
+  return NextResponse.json({ ok: !result.authFailed, ...result, retroSorted, unlabeledSkipped, outstanding })
 }
