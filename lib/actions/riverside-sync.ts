@@ -148,11 +148,11 @@ async function expandSelection(
     const productions = await listProductions()
     for (const prod of productions) {
       if (!productionIds.includes(prod.id)) continue
-      for (const scope of scopesFor(prod)) {
-        const [kind, id] = scope.id.split(":")
-        if (kind === "studio") studioIds.push(id)
-        else projectIds.push(id)
-      }
+      // Query by studio, not by each project underneath it. A studio query
+      // already returns every recording in its projects, so Slow costs 9 calls
+      // instead of 133 — the difference is about 150s of the shared rate limit
+      // budget per run, on a key someone else depends on.
+      for (const studio of prod.studios ?? []) studioIds.push(studio.id)
     }
   }
 
