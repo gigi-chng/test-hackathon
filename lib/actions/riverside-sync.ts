@@ -162,6 +162,65 @@ async function expandSelection(
   }
 }
 
+/**
+ * Re-check recordings already sitting in the review queue.
+ *
+ * Auto-confirmation otherwise only happens at import time, so a backfill
+ * leaves every recording waiting even after its speakers become known. Naming
+ * someone once should pay off across the whole queue, not just future
+ * recordings — map "Sam Lessin" and every pending recording whose remaining
+ * speakers are all decided sorts itself.
+ *
+ * Same conservative rule as the import path: one undecided speaker and the
+ * recording stays put.
+ */
+export async function resolvePendingTranscripts(
+  limit = 12
+): Promise<{ resolved: number; stillPending: number; errors: string[] }> {
+  const rows = await prisma.transcript.findMany({
+    where: { status: "pending" },
+    orderBy: { recordedAt: "desc" },
+  })
+
+  let resolved = 0
+  const errors: string[] = []
+
+  for (const row of rows) {
+    if (resolved >= limit) break
+
+    try {
+      const detected = await detectSpeakers(row.rawText)
+      if (detected.unlabeled) continue
+
+      const labels = detected.speakers.map(s => s.label)
+      const choices = (row.identifyChoices ?? {}) as Record<string, string>
+      const { speakerMap, unknown } = await resolveAliases(labels)
+
+      // Answers tapped in the email count as decisions too.
+      if (unknown.some(l => !(l in choices))) continue
+
+      const map: Record<string, string> = { ...speakerMap }
+      let clash = false
+      for (const [label, picked] of Object.entries(choices)) {
+        if (picked === "none") continue
+        if (map[picked] && map[picked] !== label) { clash = true; break }
+        map[picked] = label
+      }
+      // Two labels claiming one partner needs a person, not a retry.
+      if (clash) continue
+
+      await confirmTranscript(row.id, map)
+      resolved += 1
+    } catch (err) {
+      errors.push(`${row.title}: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  const stillPending = await prisma.transcript.count({ where: { status: "pending" } })
+  if (resolved > 0) revalidatePath("/transcripts")
+  return { resolved, stillPending, errors }
+}
+
 // ─── Sync ────────────────────────────────────────────────────────────────────
 
 /**
