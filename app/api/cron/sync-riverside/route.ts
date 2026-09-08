@@ -5,7 +5,7 @@ import {
   resolvePendingTranscripts,
   type SyncResult,
 } from "@/lib/actions/riverside-sync"
-import { sendSpeakerIdRequests } from "@/lib/actions/speaker-id-email"
+import { sendOutstandingSpeakers } from "@/lib/actions/speaker-id-email"
 
 export const maxDuration = 300
 
@@ -103,19 +103,19 @@ export async function GET(req: NextRequest) {
     console.error("[sync-riverside] pending sweep failed", err)
   }
 
-  // Anything Riverside diarized without names gets its own email, with an
-  // isolated audio link per voice, so it can be identified before it's sorted.
-  let speakerIdEmails = 0
+  // One running list of everything still unidentified, rather than an email
+  // per recording — a backfill of 47 would otherwise mean a burst of them.
+  let outstanding: Awaited<ReturnType<typeof sendOutstandingSpeakers>> | null = null
   try {
-    speakerIdEmails = (await sendSpeakerIdRequests()).sent
+    outstanding = await sendOutstandingSpeakers()
   } catch (err) {
     console.error("[sync-riverside] speaker-id email failed", err)
     result.errors.push(
-      `speaker-id email failed: ${err instanceof Error ? err.message : String(err)}`
+      `outstanding-speakers email failed: ${err instanceof Error ? err.message : String(err)}`
     )
   }
 
   await report(result, sinceDays, limit)
 
-  return NextResponse.json({ ok: !result.authFailed, ...result, retroSorted, speakerIdEmails })
+  return NextResponse.json({ ok: !result.authFailed, ...result, retroSorted, outstanding })
 }

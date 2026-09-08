@@ -206,6 +206,29 @@ async function rememberAliases(
   }
 }
 
+/**
+ * Record one decision about one label, immediately.
+ *
+ * A real name is a person across the whole workspace, so answering "Kevin
+ * Colleran is not a partner" once should settle him in every recording he
+ * appears in, not just the one that happened to be asked about. Positional
+ * labels are refused for the same reason they're never remembered.
+ */
+export async function rememberAlias(
+  display: string,
+  partner: string | null
+): Promise<{ remembered: boolean }> {
+  const label = display.toLowerCase().trim()
+  if (!label || isGenericLabel(label)) return { remembered: false }
+
+  await prisma.speakerAlias.upsert({
+    where: { label },
+    create: { label, display, partner },
+    update: { partner, display },
+  })
+  return { remembered: true }
+}
+
 /** Look up remembered decisions for a set of labels. */
 export async function resolveAliases(labels: string[]): Promise<{
   /** partner key -> label, for labels we've seen mapped before */

@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db/prisma"
 import { PARTNERS, type Partner } from "@/lib/partners"
-import { detectSpeakers, resolveAliases, confirmTranscript } from "@/lib/actions/transcripts"
+import {
+  detectSpeakers,
+  resolveAliases,
+  confirmTranscript,
+  rememberAlias,
+} from "@/lib/actions/transcripts"
+import { isGenericLabel } from "@/lib/transcript-parse"
 
 export const maxDuration = 300
 
@@ -52,12 +58,60 @@ async function outstanding(rawText: string, choices: Record<string, string>) {
   }
 }
 
+/**
+ * "Sort it with what I've told you." Anyone still unidentified is treated as
+ * not a partner, so their words simply don't enter the library. Requiring
+ * every speaker to be named meant one unrecognised guest could hold a whole
+ * recording out of the library indefinitely.
+ */
+async function confirmFinalize(token: string | null) {
+  if (!token) return page("Invalid link", "<p>Missing token.</p>", "warn")
+  const row = await load(token)
+  if (!row) return page("Not found", "<p>That recording no longer exists.</p>", "warn")
+  if (row.status === "confirmed") {
+    return page("Already sorted", `<p><strong>${esc(row.title)}</strong> is already done.</p>`)
+  }
+
+  const choices = (row.identifyChoices ?? {}) as Record<string, string>
+  const { detected, undecided } = await outstanding(row.rawText, choices)
+  const named = Object.entries(choices).filter(([, p]) => p !== "none")
+
+  return page(
+    "Sort it now?",
+    `<p><strong>${esc(row.title)}</strong></p>
+     <p>${
+       named.length
+         ? `Will be saved: ${named.map(([l, p]) => `<strong>${esc(partnerName(p))}</strong> (${esc(l)})`).join(", ")}.`
+         : "Nothing has been identified as a partner, so <strong>nothing will be saved</strong>."
+     }</p>
+     ${
+       undecided.length
+         ? `<p style="color:#666">Not identified, so dropped:
+            ${undecided.map(esc).join(", ")}.</p>`
+         : ""
+       }
+     <form method="POST" action="/api/riverside/identify">
+       <input type="hidden" name="token" value="${esc(token)}">
+       <input type="hidden" name="finalize" value="1">
+       <button type="submit" style="background:#111;color:#fff;border:0;border-radius:6px;
+         padding:11px 20px;font-size:15px;cursor:pointer">${
+           named.length ? "Sort it" : "Skip this recording"
+         }</button>
+     </form>
+     <p style="color:#999;font-size:13px;margin-top:16px">${detected.speakers.length} speakers detected.
+     You can still delete and re-import it from /transcripts afterwards.</p>`
+  )
+}
+
 // ─── GET: show the confirmation ──────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token")
   const speaker = req.nextUrl.searchParams.get("s")
   const choice = req.nextUrl.searchParams.get("p")
+  const finalize = req.nextUrl.searchParams.get("finalize") === "1"
+
+  if (finalize) return confirmFinalize(token)
 
   if (!token || !speaker || !choice) {
     return page("Invalid link", "<p>That link is missing information.</p>", "warn")
@@ -136,11 +190,60 @@ export async function GET(req: NextRequest) {
 
 // ─── POST: apply it ──────────────────────────────────────────────────────────
 
+/** Build partner -> label from remembered aliases plus tapped answers. */
+function buildMap(
+  remembered: Record<string, string>,
+  choices: Record<string, string>
+): { map: Record<string, string> } | { clash: [string, string, string] } {
+  const map: Record<string, string> = { ...remembered }
+  for (const [label, picked] of Object.entries(choices)) {
+    if (picked === "none") continue
+    if (map[picked] && map[picked] !== label) return { clash: [picked, map[picked], label] }
+    map[picked] = label
+  }
+  return { map }
+}
+
 export async function POST(req: NextRequest) {
   const form = await req.formData()
   const token = String(form.get("token") ?? "")
   const speaker = String(form.get("s") ?? "")
   const choice = String(form.get("p") ?? "")
+
+  // "Sort it with what I've told you" — undecided speakers are dropped.
+  if (String(form.get("finalize") ?? "") === "1") {
+    const row = await load(token)
+    if (!row) return page("Not found", "<p>That recording no longer exists.</p>", "warn")
+    if (row.status === "confirmed") {
+      return page("Already sorted", `<p><strong>${esc(row.title)}</strong> is already done.</p>`)
+    }
+    const choices = (row.identifyChoices ?? {}) as Record<string, string>
+    const { remembered } = await outstanding(row.rawText, choices)
+    const built = buildMap(remembered, choices)
+    if ("clash" in built) {
+      const [pk, a, b] = built.clash
+      return page(
+        "Conflicting answers",
+        `<p><strong>${esc(partnerName(pk))}</strong> is mapped to both <strong>${esc(a)}</strong>
+         and <strong>${esc(b)}</strong>. Sort it out on <a href="/transcripts">/transcripts</a>.</p>`,
+        "warn"
+      )
+    }
+    const result = await confirmTranscript(row.id, built.map)
+    const added = Object.entries(result.stored)
+    return page(
+      added.length ? "Sorted" : "Skipped",
+      `<p><strong>${esc(row.title)}</strong></p>
+       ${
+         added.length
+           ? `<ul>${added
+               .map(([pk, n]) => `<li>${esc(partnerName(pk))}: ${n} passage${n === 1 ? "" : "s"}</li>`)
+               .join("")}</ul>`
+           : "<p>Nothing was identified as a partner, so nothing was saved to the library.</p>"
+       }
+       <p><a href="/transcripts">/transcripts</a></p>`
+    )
+  }
 
   if (!token || !speaker || !choice) {
     return page("Invalid request", "<p>Missing information.</p>", "warn")
@@ -163,15 +266,27 @@ export async function POST(req: NextRequest) {
     data: { identifyChoices: choices },
   })
 
+  // Settle a real name globally the moment it's answered, so the same person
+  // stops being asked about in every other recording they appear in. Refused
+  // for positional labels, which mean a different person each time.
+  await rememberAlias(speaker, choice === "none" ? null : choice)
+
   const { remembered, undecided } = await outstanding(row.rawText, choices)
 
   if (undecided.length > 0) {
     return page(
       "Got it",
-      `<p><strong>${esc(speaker)}</strong> = ${esc(partnerName(choice))}.</p>
-       <p>Still to identify: <strong>${undecided.map(esc).join(", ")}</strong>. Use the other
-       buttons in the email, or finish on <a href="/transcripts">/transcripts</a>. Nothing is
-       sorted until every speaker is answered.</p>`
+      `<p><strong>${esc(speaker)}</strong> = ${esc(partnerName(choice))}${
+        isGenericLabel(speaker) ? "" : ", remembered everywhere"
+      }.</p>
+       <p>Still unidentified in this recording: <strong>${undecided.map(esc).join(", ")}</strong>.</p>
+       <p>Answer them from the email, or sort it now and drop them:</p>
+       <form method="POST" action="/api/riverside/identify">
+         <input type="hidden" name="token" value="${esc(token)}">
+         <input type="hidden" name="finalize" value="1">
+         <button type="submit" style="background:#111;color:#fff;border:0;border-radius:6px;
+           padding:10px 18px;font-size:14px;cursor:pointer">Sort it now, the rest aren't partners</button>
+       </form>`
     )
   }
 

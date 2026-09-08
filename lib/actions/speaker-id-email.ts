@@ -17,121 +17,144 @@ function esc(s: string): string {
     .replace(/"/g, "&quot;")
 }
 
+const CHOICES: [string, string][] = [
+  ...(Object.keys(PARTNERS) as Partner[]).map(
+    k => [k, PARTNERS[k].displayName.split(" ")[0]] as [string, string]
+  ),
+  ["none", "Not a partner"],
+]
+
+function buttons(token: string, label: string) {
+  return CHOICES.map(
+    ([key, text]) =>
+      `<a href="${BASE}/api/riverside/identify?token=${token}&amp;s=${encodeURIComponent(label)}&amp;p=${key}"
+style="display:inline-block;margin:0 5px 5px 0;padding:6px 12px;border:1px solid #ccc;
+border-radius:6px;color:#111;text-decoration:none;font-size:13px">${esc(text)}</a>`
+  ).join("")
+}
+
 /**
- * Ask who the unnamed speakers are, before anything gets sorted into a
- * partner's library.
+ * One running list of every speaker still to be identified.
  *
- * Uploaded recordings get diarized without names — "speaker-0", "Speaker 2" —
- * and there is no way to tell from text alone whether Speaker 1 is Sam or a
- * guest. Each of those voices does have its own audio track though, so the
- * email links to that one speaker in isolation alongside their longest quote.
+ * Named speakers are grouped: a real name is the same person everywhere, so
+ * answering once settles every recording they appear in and the list shrinks
+ * by more than one row. Positional labels can't be grouped — "Speaker 1" is a
+ * different person in each recording — so those are listed per recording with
+ * their isolated audio.
  *
- * Sends once per recording. The transcript sits in the review queue, unsorted,
- * until someone maps it.
+ * Anything never identified simply never reaches the library, which is the
+ * intended default rather than a backlog to clear.
  */
-export async function sendSpeakerIdRequests(): Promise<{ sent: number; recordings: string[] }> {
+export async function sendOutstandingSpeakers(): Promise<{
+  named: number
+  unnamedRecordings: number
+  recordings: number
+  sent: boolean
+}> {
   const to = process.env.REPORT_EMAIL
-  if (!to || !process.env.RESEND_API_KEY) return { sent: 0, recordings: [] }
+  const empty = { named: 0, unnamedRecordings: 0, recordings: 0, sent: false }
+  if (!to || !process.env.RESEND_API_KEY) return empty
 
   const rows = await prisma.transcript.findMany({
-    where: { status: "pending", speakerAlertAt: null, riversideId: { not: null } },
-    orderBy: { recordedAt: "desc" },
+    where: { status: "pending" },
+    orderBy: [{ recordedAt: { sort: "desc", nulls: "last" } }],
   })
+  if (rows.length === 0) return empty
 
-  const blocks: string[] = []
-  const alerted: string[] = []
+  // label -> where it appears, for names that can be settled globally
+  const byName = new Map<
+    string,
+    { words: number; sample: string; token: string; titles: string[] }
+  >()
+  // per-recording blocks for positional labels
+  const anonBlocks: string[] = []
+  let touched = 0
 
   for (const row of rows) {
-    const detected = await detectSpeakers(row.rawText)
-    const unnamed = detected.speakers.filter(s => isGenericLabel(s.label))
-
-    // Nothing anonymous here — the normal review queue covers it.
-    if (unnamed.length === 0 && !detected.unlabeled) continue
-
-    // Buttons go on every speaker still awaiting a decision, not just the
-    // anonymous ones: a recording can only be sorted once all of them are
-    // answered, so a named guest sitting unresolved would strand it.
-    const { unknown } = await resolveAliases(detected.speakers.map(s => s.label))
-    const undecided = new Set(unknown)
-
-    // @default(cuid()) is applied by Prisma on create, so a row that predates
-    // this column has none. Mint one rather than emailing a dead link.
     let token = row.identifyToken
     if (!token) {
       token = randomUUID()
       await prisma.transcript.update({ where: { id: row.id }, data: { identifyToken: token } })
     }
 
+    const detected = await detectSpeakers(row.rawText)
+    const choices = (row.identifyChoices ?? {}) as Record<string, string>
+    const { unknown } = await resolveAliases(detected.speakers.map(s => s.label))
+    const undecided = detected.speakers.filter(
+      s => unknown.includes(s.label) && !(s.label in choices)
+    )
+    if (undecided.length === 0) continue
+    touched += 1
+
     const media = (row.speakerMedia ?? {}) as Record<string, string>
     const when = row.recordedAt
       ? row.recordedAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
       : "no date"
 
-    // One tap per choice. These are GETs that only render a confirm page; the
-    // actual write needs the button on that page, so a link scanner can't map
-    // a speaker by accident.
-    const buttons = (label: string) => {
-      const opts: [string, string][] = [
-        ...(Object.keys(PARTNERS) as Partner[]).map(
-          k => [k, PARTNERS[k].displayName.split(" ")[0]] as [string, string]
-        ),
-        ["none", "Not a partner"],
-      ]
-      return opts
-        .map(
-          ([key, text]) =>
-            `<a href="${BASE}/api/riverside/identify?token=${token}&amp;s=${encodeURIComponent(
-              label
-            )}&amp;p=${key}" style="display:inline-block;margin:0 6px 6px 0;padding:7px 13px;
-border:1px solid #ccc;border-radius:6px;color:#111;text-decoration:none;font-size:13px">${esc(text)}</a>`
-        )
-        .join("")
+    const anon = undecided.filter(s => isGenericLabel(s.label))
+    for (const s of undecided) {
+      if (isGenericLabel(s.label)) continue
+      const entry = byName.get(s.label) ?? {
+        words: 0, sample: s.sample, token, titles: [],
+      }
+      entry.words += s.words
+      entry.titles.push(row.title)
+      // Any one recording's token settles the name everywhere, so whichever
+      // was seen first is fine — no need to pick a "best" one.
+      byName.set(s.label, entry)
     }
 
-    const speakerRows = detected.unlabeled
-      ? `<p style="margin:8px 0;color:#b00">Riverside produced no speaker labels at all for this
-recording, so it can't be split by voice. It needs the per-participant tracks exporting by hand.</p>`
-      : detected.speakers
-          .filter(s => undecided.has(s.label))
-          .map(s => {
-            const listen = media[s.label]
-              ? ` &middot; <a href="${BASE}/api/riverside/audio?t=${row.id}&amp;s=${encodeURIComponent(s.label)}"
-style="color:#0645ad">listen</a>`
-              : ""
-            return `<div style="margin:0 0 18px">
-<p style="margin:0 0 2px">
+    if (anon.length > 0) {
+      anonBlocks.push(`<div style="margin:0 0 22px;padding-left:12px;border-left:3px solid #eee">
+<p style="margin:0 0 2px"><strong>${esc(row.title.slice(0, 90))}</strong></p>
+<p style="margin:0 0 10px;color:#777;font-size:12px">${when}${
+        row.sourceProject ? ` · ${esc(row.sourceProject)}` : ""
+      }</p>
+${anon
+  .map(
+    s => `<p style="margin:0 0 3px">
 <strong>${esc(s.label)}</strong>
-<span style="color:#666"> &middot; ${s.words.toLocaleString()} words${listen}</span>
-${isGenericLabel(s.label) ? ` <span style="color:#b8860b;font-size:12px">unnamed</span>` : ""}
-</p>
-<p style="margin:0 0 8px;color:#555;font-style:italic">&ldquo;${esc(s.sample)}&hellip;&rdquo;</p>
-${buttons(s.label)}
-</div>`
-          })
-          .join("")
-
-    blocks.push(`<div style="margin:0 0 28px">
-<p style="margin:0 0 2px"><strong>${esc(row.title)}</strong></p>
-<p style="margin:0 0 10px;color:#666;font-size:13px">
-${when}${row.sourceProject ? ` · ${esc(row.sourceProject)}` : ""} ·
-${detected.speakers.length} speaker${detected.speakers.length === 1 ? "" : "s"},
-${unnamed.length} unnamed
-</p>
-${speakerRows}
-<p style="margin:10px 0 0;font-size:13px">
-<a href="${BASE}/transcripts" style="color:#0645ad">Or map them all in the app &rarr;</a>
-</p>
+<span style="color:#777"> · ${s.words.toLocaleString()} words${
+      media[s.label]
+        ? ` · <a href="${BASE}/api/riverside/audio?t=${row.id}&amp;s=${encodeURIComponent(
+            s.label
+          )}" style="color:#0645ad">listen</a>`
+        : ""
+    }</span></p>
+<p style="margin:0 0 6px;color:#555;font-style:italic;font-size:13px">&ldquo;${esc(
+      s.sample.slice(0, 150)
+    )}&hellip;&rdquo;</p>
+${buttons(token, s.label)}`
+  )
+  .join("")}
+<p style="margin:8px 0 0">
+<a href="${BASE}/api/riverside/identify?token=${token}&amp;finalize=1"
+style="color:#777;font-size:12px">skip this recording &rarr;</a></p>
 </div>`)
-
-    alerted.push(row.id)
+    }
   }
 
-  if (blocks.length === 0) return { sent: 0, recordings: [] }
+  if (byName.size === 0 && anonBlocks.length === 0) return empty
 
-  const subject =
-    blocks.length === 1
-      ? "1 recording has unnamed speakers — who is who?"
-      : `${blocks.length} recordings have unnamed speakers — who is who?`
+  const nameRows = [...byName.entries()]
+    .sort((a, b) => b[1].words - a[1].words)
+    .map(
+      ([label, v]) => `<div style="margin:0 0 18px">
+<p style="margin:0 0 2px"><strong>${esc(label)}</strong>
+<span style="color:#777"> · ${v.words.toLocaleString()} words across ${v.titles.length} recording${
+        v.titles.length === 1 ? "" : "s"
+      }</span></p>
+<p style="margin:0 0 6px;color:#555;font-style:italic;font-size:13px">&ldquo;${esc(
+        v.sample.slice(0, 150)
+      )}&hellip;&rdquo;</p>
+${buttons(v.token, label)}
+</div>`
+    )
+    .join("")
+
+  const subject = `${byName.size + anonBlocks.length} speakers to identify across ${touched} recording${
+    touched === 1 ? "" : "s"
+  }`
 
   await new Resend(process.env.RESEND_API_KEY)
     .emails.send({
@@ -139,25 +162,44 @@ ${speakerRows}
       to,
       subject,
       html: `<div style="font-family:system-ui,sans-serif;font-size:14px;line-height:1.5;max-width:680px">
-<p>Riverside diarized these without names, so nothing has been sorted into anyone's
-library yet. Listen to a voice, then tap who it is — one tap per speaker. Nothing is
-sorted until every speaker in a recording has been answered.</p>
-<p style="color:#666;font-size:13px">Once you've named someone whose label is a real
-name, that decision is remembered. Positional labels like &ldquo;Speaker 1&rdquo; never are —
-they mean a different person in every recording.</p>
-<hr style="border:none;border-top:1px solid #ddd;margin:20px 0">
-${blocks.join("")}
+<p><strong>${touched} recording${touched === 1 ? "" : "s"}</strong> are waiting on speaker
+identification. Nothing is saved to anyone's library until you say who is who, and anything
+you never identify simply doesn't get saved &mdash; there's no need to clear this list.</p>
+
+${
+  byName.size > 0
+    ? `<h3 style="margin:26px 0 4px;font-size:15px">Names (${byName.size})</h3>
+<p style="margin:0 0 16px;color:#777;font-size:13px">Answering one of these settles that person
+in every recording they appear in.</p>
+${nameRows}`
+    : ""
+}
+
+${
+  anonBlocks.length > 0
+    ? `<h3 style="margin:26px 0 4px;font-size:15px">Unnamed voices (${anonBlocks.length} recording${
+        anonBlocks.length === 1 ? "" : "s"
+      })</h3>
+<p style="margin:0 0 16px;color:#777;font-size:13px">Riverside labelled these by position, so
+&ldquo;Speaker 1&rdquo; is a different person in each one and they can't be answered in bulk.
+Listen to a voice to place it. These answers are never remembered.</p>
+${anonBlocks.join("")}`
+    : ""
+}
+
+<hr style="border:none;border-top:1px solid #ddd;margin:24px 0">
+<p style="font-size:13px"><a href="${BASE}/transcripts" style="color:#0645ad">Do it all in the app &rarr;</a></p>
 </div>`,
     })
     .catch(err => {
-      console.error("[speaker-id-email]", err)
+      console.error("[outstanding-speakers]", err)
       throw err
     })
 
   await prisma.transcript.updateMany({
-    where: { id: { in: alerted } },
+    where: { status: "pending", speakerAlertAt: null },
     data: { speakerAlertAt: new Date() },
   })
 
-  return { sent: blocks.length, recordings: alerted }
+  return { named: byName.size, unnamedRecordings: anonBlocks.length, recordings: touched, sent: true }
 }
