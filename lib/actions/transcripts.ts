@@ -163,15 +163,44 @@ export async function confirmTranscript(
   id: string,
   speakerMap: Record<string, string>
 ): Promise<{ stored: Record<string, number>; skipped: string[] }> {
-  const record = await prisma.transcript.findUnique({ where: { id } })
-  if (!record) throw new Error("Transcript not found")
-  if (record.status === "confirmed") {
+  // Claim the row atomically before doing any work.
+  //
+  // This used to read the status and then write it in a separate step, so two
+  // confirmations arriving together — an email tap landing while the nightly
+  // sweep processed the same row, or a double-click — both passed the check
+  // and extracted the same passages twice. One recording ended up in the
+  // library three times, which double-counts in search ranking and in the
+  // voice profiles.
+  const claimed = await prisma.transcript.updateMany({
+    where: { id, status: "pending" },
+    data: { status: "confirmed" },
+  })
+
+  if (claimed.count === 0) {
+    const exists = await prisma.transcript.findUnique({
+      where: { id },
+      select: { status: true },
+    })
+    if (!exists) throw new Error("Transcript not found")
     throw new Error("Already confirmed — delete it first to redo the mapping")
   }
 
-  const result = await extractPassages(record, speakerMap)
-  await rememberAliases(speakerMap, record.participants)
-  return result
+  const record = await prisma.transcript.findUnique({ where: { id } })
+  if (!record) throw new Error("Transcript not found")
+
+  try {
+    const result = await extractPassages(record, speakerMap)
+    await rememberAliases(speakerMap, record.participants)
+    return result
+  } catch (err) {
+    // Put it back in the queue rather than leaving a row marked confirmed
+    // with nothing extracted, which would be invisible and unretryable.
+    await prisma.transcript.updateMany({
+      where: { id, status: "confirmed" },
+      data: { status: "pending" },
+    })
+    throw err
+  }
 }
 
 // ─── Remembered speaker labels ───────────────────────────────────────────────
